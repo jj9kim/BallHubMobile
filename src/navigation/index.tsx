@@ -1,8 +1,9 @@
 import React from 'react';
+import { View, Text, StyleSheet } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { Text } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
 import ScoresScreen from '../screens/ScoresScreen';
 import GameScreen from '../screens/GameScreen';
@@ -11,7 +12,7 @@ import PlayersScreen from '../screens/PlayersScreen';
 
 export type RootStackParamList = {
   MainTabs: undefined;
-  Game: { gameId: string; gameDate: string };
+  Game: { gameId: number; gameDate: string };
 };
 
 export type TabParamList = {
@@ -23,32 +24,33 @@ export type TabParamList = {
 const Tab = createBottomTabNavigator<TabParamList>();
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
-function TabIcon({ name, focused }: { name: string; focused: boolean }) {
-  const icons: Record<string, string> = {
-    Scores: '🏀',
-    Teams: '🏆',
-    Players: '👤',
-  };
-  return (
-    <Text style={{ fontSize: 20, opacity: focused ? 1 : 0.5 }}>
-      {icons[name] ?? '●'}
-    </Text>
-  );
-}
+type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
+
+const TAB_ICONS: Record<string, { active: IoniconName; inactive: IoniconName }> = {
+  Scores:  { active: 'basketball',        inactive: 'basketball-outline' },
+  Teams:   { active: 'trophy',            inactive: 'trophy-outline' },
+  Players: { active: 'person',            inactive: 'person-outline' },
+};
 
 function MainTabs() {
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
         headerShown: false,
-        tabBarStyle: { backgroundColor: '#1a1a1a', borderTopColor: '#333' },
+        tabBarStyle: styles.tabBar,
         tabBarActiveTintColor: '#ffffff',
-        tabBarInactiveTintColor: '#888888',
-        tabBarIcon: ({ focused }) => <TabIcon name={route.name} focused={focused} />,
+        tabBarInactiveTintColor: '#555555',
+        tabBarShowLabel: true,
+        tabBarLabelStyle: styles.tabLabel,
+        tabBarIcon: ({ focused, color, size }) => {
+          const icons = TAB_ICONS[route.name];
+          const name = focused ? icons.active : icons.inactive;
+          return <Ionicons name={name} size={22} color={color} />;
+        },
       })}
     >
-      <Tab.Screen name="Scores" component={ScoresScreen} />
-      <Tab.Screen name="Teams" component={TeamsScreen} />
+      <Tab.Screen name="Scores"  component={ScoresScreen} />
+      <Tab.Screen name="Teams"   component={TeamsScreen} />
       <Tab.Screen name="Players" component={PlayersScreen} />
     </Tab.Navigator>
   );
@@ -62,9 +64,32 @@ export default function Navigation() {
         <Stack.Screen
           name="Game"
           component={GameScreen}
-          options={{ headerShown: true, headerStyle: { backgroundColor: '#1a1a1a' }, headerTintColor: '#fff', title: '' }}
+          options={{
+            headerShown: true,
+            headerStyle: { backgroundColor: '#141414' },
+            headerTintColor: '#fff',
+            headerTitle: '',
+            headerBackTitle: 'Games',
+            headerShadowVisible: false,
+          }}
         />
       </Stack.Navigator>
     </NavigationContainer>
   );
 }
+
+const styles = StyleSheet.create({
+  tabBar: {
+    backgroundColor: '#141414',
+    borderTopWidth: 1,
+    borderTopColor: '#242424',
+    paddingTop: 6,
+    paddingBottom: 4,
+    height: 60,
+  },
+  tabLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    marginTop: 2,
+  },
+});

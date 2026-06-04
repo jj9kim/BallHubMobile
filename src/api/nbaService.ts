@@ -1,209 +1,190 @@
-export interface NBATeamStats {
-  team_id: number;
-  team_abbreviation: string;
-  team_name: string;
-  wl?: string;
-  pts: number;
-  fgm: number;
-  fga: number;
-  fg_pct: number;
-  fg3m: number;
-  fg3a: number;
-  fg3_pct: number;
-  ftm: number;
-  fta: number;
-  ft_pct: number;
-  oreb: number;
-  dreb: number;
-  reb: number;
-  ast: number;
-  stl: number;
-  blk: number;
-  tov: number;
-  pf: number;
-  plus_minus: number;
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+export interface Game {
+  GameID: number;
+  Season: number;
+  Status: string;
+  Day: string;
+  DateTime: string;
+  AwayTeam: string;
+  HomeTeam: string;
+  AwayTeamID: number;
+  HomeTeamID: number;
+  AwayTeamScore: number;
+  HomeTeamScore: number;
+  Quarter: string | null;
+  TimeRemainingMinutes: number | null;
+  TimeRemainingSeconds: number | null;
+  Attendance: number | null;
+  Channel: string | null;
 }
 
-export interface NBAGame {
-  game_date: string;
-  game_id: string;
-  matchup: string;
-  season_id: string;
-  teams: NBATeamStats[];
-  game_status?: string;
-  game_time?: string;
-  arena?: string;
+export interface Standing {
+  Season: number;
+  TeamID: number;
+  Key: string;
+  City: string;
+  Name: string;
+  Conference: string;
+  Division: string;
+  Wins: number;
+  Losses: number;
+  Percentage: number;
+  GamesBack: number;
+  StreakDescription: string;
+  PointsPerGameFor: number;
+  PointsPerGameAgainst: number;
+  HomeWins: number;
+  HomeLosses: number;
+  AwayWins: number;
+  AwayLosses: number;
+  LastTenWins: number;
+  LastTenLosses: number;
+  ConferenceRank: number;
 }
 
-export interface NBAAPIResponse {
-  success: boolean;
-  games: NBAGame[];
-  count: number;
-  error?: string;
+export interface Player {
+  PlayerID: number;
+  FirstName: string;
+  LastName: string;
+  Team: string;
+  TeamID: number;
+  Position: string;
+  Jersey: number;
+  Height: number;
+  Weight: number;
+  BirthDate: string;
+  BirthCity: string;
+  BirthState: string;
+  BirthCountry: string;
+  College: string | null;
+  Experience: number;
+  Salary: number;
+  Status: string;
+  PhotoUrl: string;
+  UsaTodayHeadshotUrl: string | null;
 }
 
-export interface FutureGamesResponse {
-  success: boolean;
-  games: NBAGame[];
-  count: number;
-  days_checked: number;
-  season_end?: string;
-  error?: string;
+export interface PlayerStats {
+  PlayerID: number;
+  Name: string;
+  Team: string;
+  Position: string;
+  Season: number;
+  Games: number;
+  Minutes: number;
+  Points: number;
+  Rebounds: number;
+  Assists: number;
+  Steals: number;
+  BlockedShots: number;
+  Turnovers: number;
+  FieldGoalsPercentage: number;
+  ThreePointersPercentage: number;
+  FreeThrowsPercentage: number;
+  TrueShootingPercentage: number;
+  PlayerEfficiencyRating: number;
+  UsageRatePercentage: number;
+  PlusMinus: number;
+  DoubleDoubles: number;
+  TripleDoubles: number;
 }
 
-export interface FullScheduleGame {
-  leagueId: string;
-  seasonYear: string;
-  gameDate: string;
-  gameId: string;
-  gameCode: string;
-  gameStatus: number;
-  gameStatusText: string;
-  gameSequence: number;
-  gameDateEst: string;
-  gameTimeEst: string;
-  gameDateTimeEst: string;
-  gameDateUTC: string;
-  gameTimeUTC: string;
-  gameDateTimeUTC: string;
-  awayTeamTime: string;
-  homeTeamTime: string;
-  day: string;
-  monthNum: number;
-  weekNumber: number;
-  weekName: string;
-  ifNecessary: boolean;
-  seriesGameNumber: number;
-  gameLabel: string;
-  gameSubLabel: string;
-  seriesText: string;
-  arenaName: string;
-  arenaState: string;
-  arenaCity: string;
-  postponedStatus: string;
-  branchLink: string;
-  gameSubtype: string;
-  isNeutral: boolean;
-  homeTeam_teamId: number;
-  homeTeam_teamName: string;
-  homeTeam_teamCity: string;
-  homeTeam_teamTricode: string;
-  homeTeam_teamSlug: string;
-  homeTeam_wins: number;
-  homeTeam_losses: number;
-  homeTeam_score: number;
-  homeTeam_seed: number;
-  awayTeam_teamId: number;
-  awayTeam_teamName: string;
-  awayTeam_teamCity: string;
-  awayTeam_teamTricode: string;
-  awayTeam_teamSlug: string;
-  awayTeam_wins: number;
-  awayTeam_losses: number;
-  awayTeam_score: number;
-  awayTeam_seed: number;
-  is_home?: boolean;
+export interface BoxScore {
+  Game: Game;
+  HomeTeam: {
+    Team: string;
+    Players: PlayerGameStats[];
+  };
+  AwayTeam: {
+    Team: string;
+    Players: PlayerGameStats[];
+  };
+  PlayerGames: PlayerGameStats[];
 }
 
-export interface FullScheduleResponse {
-  success: boolean;
-  games: FullScheduleGame[];
-  count: number;
-  future_count: number;
-  past_count: number;
-  live_count?: number;
-  fields: string[];
+export interface PlayerGameStats extends PlayerStats {
+  GameID: number;
+  Opponent: string;
+  HomeOrAway: string;
+  Day: string;
+  Started: number;
 }
 
-export interface TeamFullScheduleResponse {
-  success: boolean;
-  team_id: string;
-  games: FullScheduleGame[];
-  count: number;
-  future_count: number;
-  past_count: number;
-  fields: string[];
+// ── Config ────────────────────────────────────────────────────────────────────
+
+// On a real device change this to your machine's local IP e.g. http://192.168.1.x:5001
+const API_BASE_URL = 'http://localhost:5001';
+
+async function apiFetch<T>(path: string): Promise<T> {
+  const res = await fetch(`${API_BASE_URL}${path}`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}: ${path}`);
+  const json = await res.json();
+  if (!json.success) throw new Error(json.error ?? 'Unknown error');
+  return json as T;
 }
 
-// Update this to your backend's IP/URL when running on a device
-const API_BASE_URL = 'http://127.0.0.1:5000';
+// ── API calls ─────────────────────────────────────────────────────────────────
 
-export class NBAService {
-  static async fetchGames(): Promise<NBAAPIResponse> {
-    const response = await fetch(`${API_BASE_URL}/api/nba-games`);
-    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-    const data: NBAAPIResponse = await response.json();
-    if (!data.success) throw new Error(data.error || 'Failed to fetch NBA games');
-    return data;
-  }
+export const NBAService = {
+  // Games
+  getGamesByDate: (date: string) =>
+    apiFetch<{ games: Game[] }>(`/api/games?date=${date}`),
 
-  static async fetchFutureGames(days: number = 180): Promise<FutureGamesResponse> {
-    const response = await fetch(`${API_BASE_URL}/api/future-games?days=${days}`);
-    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-    const data = await response.json();
-    if (!data.success) throw new Error(data.error || 'Failed to fetch future games');
-    return data;
-  }
+  getLiveGames: () =>
+    apiFetch<{ games: Game[] }>('/api/games/live'),
 
-  static async fetchAllGames(): Promise<{
-    games: NBAGame[];
-    pastCount: number;
-    futureCount: number;
-    totalCount: number;
-  }> {
-    const [pastGamesResponse, futureGamesResponse] = await Promise.all([
-      this.fetchGames(),
-      this.fetchFutureGames(180),
-    ]);
-    const allGames = [...pastGamesResponse.games, ...futureGamesResponse.games];
-    const uniqueGames = Array.from(
-      new Map(allGames.map((game) => [game.game_id, game])).values()
-    );
-    return {
-      games: uniqueGames,
-      pastCount: pastGamesResponse.games.length,
-      futureCount: futureGamesResponse.games.length,
-      totalCount: uniqueGames.length,
-    };
-  }
+  getGameById: (id: number) =>
+    apiFetch<{ game: Game }>(`/api/games/${id}`),
 
-  static async fetchFullSchedule(): Promise<FullScheduleResponse> {
-    const response = await fetch(`${API_BASE_URL}/api/full-schedule`);
-    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-    const data = await response.json();
-    if (!data.success) throw new Error(data.error || 'Failed to fetch full schedule');
-    return data;
-  }
+  getBoxScore: (id: number) =>
+    apiFetch<{ boxscore: BoxScore }>(`/api/games/${id}/boxscore`),
 
-  static async fetchTeamFullSchedule(teamId: number): Promise<TeamFullScheduleResponse> {
-    const response = await fetch(`${API_BASE_URL}/api/team/${teamId}/full-schedule`);
-    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-    const data = await response.json();
-    if (!data.success) throw new Error(data.error || 'Failed to fetch team schedule');
-    return data;
-  }
+  getPlayersByGame: (id: number) =>
+    apiFetch<{ players: PlayerGameStats[] }>(`/api/games/${id}/players`),
 
-  static isFutureGame(game: NBAGame): boolean {
-    if (game.teams.length !== 2) return false;
-    return game.teams[0].pts === 0 && game.teams[1].pts === 0;
-  }
+  // Standings
+  getStandings: (season = 2025) =>
+    apiFetch<{ standings: Standing[] }>(`/api/standings/${season}`),
 
-  static getGameStatus(game: NBAGame | FullScheduleGame): string {
-    if ('gameStatus' in game) {
-      switch (game.gameStatus) {
-        case 1: return 'Scheduled';
-        case 2: return 'Live';
-        case 3: return 'Final';
-        default: return game.gameStatusText || 'Unknown';
-      }
-    }
-    if (this.isFutureGame(game)) return 'Scheduled';
-    if (game.game_status) return game.game_status;
-    return 'Final';
-  }
+  // Teams
+  getAllTeams: () =>
+    apiFetch<{ teams: any[] }>('/api/teams'),
 
-  static getWinner(game: NBAGame): NBATeamStats | null {
-    if (game.teams.length !== 2) return null;
-    return game.teams[0].pts > game.teams[1].pts ? game.teams[0] : game.teams[1];
-  }
-}
+  getTeamRoster: (team: string) =>
+    apiFetch<{ players: Player[] }>(`/api/teams/${team}/roster`),
+
+  getTeamSchedule: (team: string, season = 2025) =>
+    apiFetch<{ games: Game[] }>(`/api/teams/${team}/schedule/${season}`),
+
+  // Players
+  getPlayerById: (id: number) =>
+    apiFetch<{ player: Player }>(`/api/players/${id}`),
+
+  getPlayerSeasonStats: (id: number, season = 2025) =>
+    apiFetch<{ stats: PlayerStats }>(`/api/players/${id}/stats/${season}`),
+
+  getPlayerGameLogs: (id: number, season = 2025) =>
+    apiFetch<{ logs: PlayerGameStats[] }>(`/api/players/${id}/gamelogs/${season}`),
+
+  // Helpers
+  formatDate: (dateStr: string): string => {
+    const d = new Date(dateStr);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const diff = Math.round((d.getTime() - today.getTime()) / 86400000);
+    if (diff === 0) return 'Today';
+    if (diff === -1) return 'Yesterday';
+    if (diff === 1) return 'Tomorrow';
+    return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  },
+
+  isLive: (game: Game): boolean =>
+    game.Status === 'InProgress',
+
+  isFinal: (game: Game): boolean =>
+    game.Status === 'Final',
+
+  isScheduled: (game: Game): boolean =>
+    game.Status === 'Scheduled',
+};
