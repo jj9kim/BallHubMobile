@@ -495,36 +495,100 @@ function LineupTab({ players, homeTeam, awayTeam }: { players: any[]; homeTeam: 
 
 // ── Playoff Bracket ───────────────────────────────────────────────────────────
 
-function SeriesCard({ series, highlightTeams }: { series: any; highlightTeams: string[] }) {
-  const [t1, t2] = series.teams;
+const EAST_TEAMS = new Set(['ATL','BOS','BKN','CHA','CHI','CLE','DET','IND','MIA','MIL','NY','ORL','PHI','TOR','WAS']);
+
+function isEastSeries(s: any) { return EAST_TEAMS.has(s.teams[0]) || EAST_TEAMS.has(s.teams[1]); }
+
+// Compact series chip for the bracket tree
+function BracketChip({ series, highlightTeams, width }: { series: any; highlightTeams: string[]; width: number }) {
+  if (!series) {
+    return <View style={[bkt.chip, { width, opacity: 0.2 }]}><Text style={bkt.tbd}>TBD</Text></View>;
+  }
+  const [t1, t2]  = series.teams;
   const w1 = series.wins[t1] ?? 0;
   const w2 = series.wins[t2] ?? 0;
-  const leader = w1 >= w2 ? t1 : t2;
   const highlighted = highlightTeams.includes(t1) || highlightTeams.includes(t2);
+  const eliminated = (team: string) => series.isComplete && team !== series.leader;
 
   return (
-    <View style={[bracket.card, highlighted && bracket.cardHighlighted]}>
-      {[t1, t2].map((team, i) => {
-        const wins = series.wins[team] ?? 0;
-        const isLeader = team === leader && series.gamesPlayed > 0;
-        const eliminated = series.isComplete && team !== leader;
+    <View style={[bkt.chip, { width }, highlighted && bkt.chipHighlighted]}>
+      {[t1, t2].map((team, i) => (
+        <View key={team} style={[bkt.teamRow, i === 0 && { borderBottomWidth: 1, borderBottomColor: '#2a2a2a' }]}>
+          <TeamLogo abbrev={team} size={18} />
+          <Text style={[bkt.teamAbbr, eliminated(team) && bkt.teamEliminated]}>{team}</Text>
+          <Text style={[bkt.winsNum,
+            !series.isComplete && (w1 > w2 ? team === t1 : team === t2) && bkt.winsLeading,
+            series.isComplete && team === series.leader && bkt.winsWon,
+          ]}>{series.wins[team] ?? 0}</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+// One column of the bracket: R1 (4) → Semis (2) → Conf Finals (1)
+// Returns the conference champion team abbreviation
+function ConferenceBracket({
+  r1, semis, confFinals, highlightTeams, chipW, align,
+}: {
+  r1: any[]; semis: any[]; confFinals: any;
+  highlightTeams: string[]; chipW: number; align: 'left' | 'right';
+}) {
+  const ROUND_GAP  = 12;
+  const CHIP_H     = 56; // approximate chip height (2 rows × 28)
+  const CONN_COLOR = '#3a3a3a';
+
+  // Connector heights between rounds
+  // Between R1 pairs → Semis: each pair of chips connects to one semi
+  const pairH = CHIP_H + ROUND_GAP; // height occupied by one R1 chip + gap below it
+
+  return (
+    <View>
+      {/* Conference label */}
+      <Text style={[bkt.confLabel, align === 'right' && { textAlign: 'right' }]}>
+        {align === 'left' ? 'EAST' : 'WEST'}
+      </Text>
+
+      {/* First Round — 4 series in two pairs */}
+      {[0, 1].map(pairIdx => {
+        const seriesA = r1[pairIdx * 2] ?? null;
+        const seriesB = r1[pairIdx * 2 + 1] ?? null;
+        const semi    = semis[pairIdx] ?? null;
+
         return (
-          <View key={team} style={[bracket.teamRow, i === 0 && { marginBottom: 6 }]}>
-            <TeamLogo abbrev={team} size={26} />
-            <Text style={[bracket.teamName, eliminated && bracket.eliminated]}>
-              {teamFullNames[team] ?? team}
-            </Text>
-            <Text style={[bracket.wins, isLeader && !eliminated && bracket.winsLeader]}>
-              {wins}
-            </Text>
+          <View key={pairIdx} style={{ flexDirection: align === 'left' ? 'row' : 'row-reverse', marginBottom: ROUND_GAP * 2 }}>
+            {/* Two R1 chips with connector */}
+            <View>
+              <BracketChip series={seriesA} highlightTeams={highlightTeams} width={chipW} />
+              {/* Vertical connector down */}
+              <View style={{ height: ROUND_GAP, marginLeft: align === 'left' ? chipW - 1 : 0, marginRight: align === 'right' ? chipW - 1 : 0, width: 1, backgroundColor: CONN_COLOR }} />
+              <BracketChip series={seriesB} highlightTeams={highlightTeams} width={chipW} />
+            </View>
+
+            {/* Horizontal connector to semi */}
+            <View style={{ justifyContent: 'center' }}>
+              <View style={{ width: 8, height: 1, backgroundColor: CONN_COLOR }} />
+            </View>
+
+            {/* Semi chip */}
+            <View style={{ justifyContent: 'center' }}>
+              <BracketChip series={semi} highlightTeams={highlightTeams} width={chipW} />
+            </View>
+
+            {/* Horizontal connector to conf finals */}
+            <View style={{ justifyContent: 'center' }}>
+              <View style={{ width: 8, height: 1, backgroundColor: CONN_COLOR }} />
+            </View>
+
+            {/* Conf Finals — only render once (for pairIdx 0), span both pairs via alignment */}
+            {pairIdx === 0 && (
+              <View style={{ justifyContent: 'center' }}>
+                <BracketChip series={confFinals} highlightTeams={highlightTeams} width={chipW} />
+              </View>
+            )}
           </View>
         );
       })}
-      {series.isComplete && (
-        <Text style={bracket.seriesResult}>
-          {leader} wins series {Math.max(w1, w2)}-{Math.min(w1, w2)}
-        </Text>
-      )}
     </View>
   );
 }
@@ -533,45 +597,90 @@ function PlayoffBracket({ highlightTeams, season }: { highlightTeams: string[]; 
   const [rounds, setRounds]   = useState<any[]>([]);
   const [playIn, setPlayIn]   = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const screenW = Dimensions.get('window').width;
 
   useEffect(() => {
     NBAService.getPlayoffBracket(season)
-      .then(res => {
-        setRounds(res.rounds ?? []);
-        setPlayIn(res.playIn ?? []);
-        setLoading(false);
-      })
+      .then(res => { setRounds(res.rounds ?? []); setPlayIn(res.playIn ?? []); setLoading(false); })
       .catch(() => setLoading(false));
   }, [season]);
 
   if (loading) return <ActivityIndicator color="#fff" style={{ marginTop: 40 }} />;
   if (!rounds.length) return <Text style={s.empty}>No playoff data available</Text>;
 
+  const r1 = rounds[0]?.series ?? [];
+  const r2 = rounds[1]?.series ?? [];
+  const r3 = rounds[2]?.series ?? [];
+  const finals = rounds[3]?.series?.[0] ?? null;
+
+  const eastR1   = r1.filter(isEastSeries);
+  const westR1   = r1.filter((s: any) => !isEastSeries(s));
+  const eastSemi = r2.filter(isEastSeries);
+  const westSemi = r2.filter((s: any) => !isEastSeries(s));
+  const eastCF   = r3.find(isEastSeries) ?? null;
+  const westCF   = r3.find((s: any) => !isEastSeries(s)) ?? null;
+
+  // Chip width: screen / 4 sections per side minus padding
+  const chipW = Math.floor((screenW - 48) / 4);
+
   return (
-    <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
-      {/* Play-In section */}
+    <ScrollView contentContainerStyle={{ padding: 12, paddingBottom: 40 }}>
+
+      {/* Play-In */}
       {playIn.length > 0 && (
-        <View>
-          <View style={[bracket.roundHeader, { borderLeftWidth: 3, borderLeftColor: '#a78bfa' }]}>
-            <Text style={[bracket.roundTitle, { color: '#a78bfa' }]}>Play-In Tournament</Text>
+        <View style={bkt.playInSection}>
+          <Text style={bkt.playInTitle}>Play-In Tournament</Text>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+            {playIn.map((s: any, i: number) => (
+              <BracketChip key={i} series={s} highlightTeams={highlightTeams} width={(screenW - 40) / 2} />
+            ))}
           </View>
-          {playIn.map((series: any, i: number) => (
-            <SeriesCard key={i} series={series} highlightTeams={highlightTeams} />
-          ))}
         </View>
       )}
 
-      {/* Playoff rounds */}
-      {rounds.map(round => (
-        <View key={round.round}>
-          <View style={bracket.roundHeader}>
-            <Text style={bracket.roundTitle}>{round.name}</Text>
+      {/* Bracket header */}
+      <View style={bkt.confRow}>
+        <Text style={bkt.confHeader}>Eastern</Text>
+        <Text style={[bkt.confHeader, { textAlign: 'right' }]}>Western</Text>
+      </View>
+
+      {/* Main bracket — East left, West right */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+        <View style={{ flexDirection: 'row', gap: 4 }}>
+          {/* East */}
+          <View>
+            {/* Round headers */}
+            <View style={bkt.roundHeaderRow}>
+              <Text style={[bkt.roundLabel, { width: chipW }]}>R1</Text>
+              <Text style={[bkt.roundLabel, { width: chipW }]}>Semis</Text>
+              <Text style={[bkt.roundLabel, { width: chipW }]}>Conf F</Text>
+            </View>
+            <ConferenceBracket
+              r1={eastR1} semis={eastSemi} confFinals={eastCF}
+              highlightTeams={highlightTeams} chipW={chipW} align="left"
+            />
           </View>
-          {round.series.map((series: any, i: number) => (
-            <SeriesCard key={i} series={series} highlightTeams={highlightTeams} />
-          ))}
+
+          {/* Finals column */}
+          <View style={bkt.finalsCol}>
+            <Text style={bkt.finalsLabel}>Finals</Text>
+            <BracketChip series={finals} highlightTeams={highlightTeams} width={chipW} />
+          </View>
+
+          {/* West (mirrored) */}
+          <View>
+            <View style={bkt.roundHeaderRow}>
+              <Text style={[bkt.roundLabel, { width: chipW, textAlign: 'right' }]}>Conf F</Text>
+              <Text style={[bkt.roundLabel, { width: chipW, textAlign: 'right' }]}>Semis</Text>
+              <Text style={[bkt.roundLabel, { width: chipW, textAlign: 'right' }]}>R1</Text>
+            </View>
+            <ConferenceBracket
+              r1={westR1} semis={westSemi} confFinals={westCF}
+              highlightTeams={highlightTeams} chipW={chipW} align="right"
+            />
+          </View>
         </View>
-      ))}
+      </ScrollView>
     </ScrollView>
   );
 }
@@ -971,7 +1080,7 @@ const facts = StyleSheet.create({
 
 const court = StyleSheet.create({
   container:       { position: 'relative', backgroundColor: '#2c2c2c', overflow: 'hidden' },
-  surface:         { ...StyleSheet.absoluteFillObject, backgroundColor: '#2c2c2c' },
+  surface:         { ...StyleSheet.absoluteFill, backgroundColor: '#2c2c2c' },
   halfLine:        { position: 'absolute', left: 0, right: 0, height: 1, backgroundColor: '#3a3a3a' },
   centerCircle:    { position: 'absolute', borderWidth: 2, borderColor: '#3a3a3a', backgroundColor: 'transparent' },
   paint:           { position: 'absolute', borderWidth: 2, borderColor: '#3a3a3a', backgroundColor: 'transparent' },
@@ -1027,17 +1136,29 @@ const table = StyleSheet.create({
   divisionTitle:   { color: '#fff', fontSize: 13, fontWeight: '700' },
 });
 
-const bracket = StyleSheet.create({
-  roundHeader:    { paddingHorizontal: 16, paddingVertical: 10, backgroundColor: '#1a1a1a' },
-  roundTitle:     { color: '#fff', fontSize: 14, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
-  card:           { marginHorizontal: 12, marginVertical: 5, backgroundColor: '#1e1e1e', borderRadius: 12, padding: 12 },
-  cardHighlighted:{ borderWidth: 1.5, borderColor: '#4caf50' },
-  teamRow:        { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  teamName:       { flex: 1, color: '#fff', fontSize: 14, fontWeight: '600' },
-  eliminated:     { color: '#555' },
-  wins:           { color: '#888', fontSize: 18, fontWeight: '600', minWidth: 20, textAlign: 'right' },
-  winsLeader:     { color: '#fff', fontWeight: '800' },
-  seriesResult:   { color: '#4caf50', fontSize: 11, fontWeight: '600', marginTop: 8, textAlign: 'center' },
+const bkt = StyleSheet.create({
+  chip:            { backgroundColor: '#1e1e1e', borderRadius: 8, overflow: 'hidden' },
+  chipHighlighted: { borderWidth: 1.5, borderColor: '#4caf50' },
+  teamRow:         { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 6, paddingVertical: 5, gap: 5 },
+  teamAbbr:        { flex: 1, color: '#fff', fontSize: 11, fontWeight: '700' },
+  teamEliminated:  { color: '#444' },
+  winsNum:         { color: '#555', fontSize: 13, fontWeight: '700', minWidth: 14, textAlign: 'right' },
+  winsLeading:     { color: '#aaa' },
+  winsWon:         { color: '#fff' },
+  tbd:             { color: '#444', fontSize: 11, padding: 8 },
+
+  confRow:         { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 },
+  confHeader:      { flex: 1, color: '#888', fontSize: 12, fontWeight: '700', textTransform: 'uppercase' },
+  confLabel:       { color: '#666', fontSize: 10, fontWeight: '700', textTransform: 'uppercase', marginBottom: 4 },
+
+  roundHeaderRow:  { flexDirection: 'row', marginBottom: 4, gap: 4 },
+  roundLabel:      { color: '#555', fontSize: 10, fontWeight: '600', textTransform: 'uppercase', textAlign: 'center' },
+
+  finalsCol:       { alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
+  finalsLabel:     { color: '#f59e0b', fontSize: 10, fontWeight: '700', textTransform: 'uppercase', marginBottom: 4, textAlign: 'center' },
+
+  playInSection:   { backgroundColor: '#1a1a1a', borderRadius: 12, padding: 12, marginBottom: 16 },
+  playInTitle:     { color: '#a78bfa', fontSize: 12, fontWeight: '700', textTransform: 'uppercase', marginBottom: 8 },
 });
 
 const modal = StyleSheet.create({
