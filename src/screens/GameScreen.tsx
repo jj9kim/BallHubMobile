@@ -496,108 +496,97 @@ function LineupTab({ players, homeTeam, awayTeam }: { players: any[]; homeTeam: 
 // ── Playoff Bracket ───────────────────────────────────────────────────────────
 
 const EAST_TEAMS = new Set(['ATL','BOS','BKN','CHA','CHI','CLE','DET','IND','MIA','MIL','NY','ORL','PHI','TOR','WAS']);
+const CONN = '#3a3a3a';
 
-function isEastSeries(s: any) { return EAST_TEAMS.has(s.teams[0]) || EAST_TEAMS.has(s.teams[1]); }
+function isEastSeries(s: any) {
+  return EAST_TEAMS.has(s.teams[0]) || EAST_TEAMS.has(s.teams[1]);
+}
 
-// Compact series chip for the bracket tree
-function BracketChip({ series, highlightTeams, width }: { series: any; highlightTeams: string[]; width: number }) {
+// ── Compact bracket chip ──────────────────────────────────────────────────────
+function BracketChip({ series, highlightTeams, flex }: {
+  series: any; highlightTeams: string[]; flex?: number;
+}) {
   if (!series) {
-    return <View style={[bkt.chip, { width, opacity: 0.2 }]}><Text style={bkt.tbd}>TBD</Text></View>;
+    return (
+      <View style={[bkt.chip, flex !== undefined && { flex }]}>
+        <View style={bkt.teamRow}><Text style={bkt.tbd}>TBD</Text></View>
+        <View style={bkt.divider} />
+        <View style={bkt.teamRow}><Text style={bkt.tbd}>TBD</Text></View>
+      </View>
+    );
   }
-  const [t1, t2]  = series.teams;
+  const [t1, t2] = series.teams;
   const w1 = series.wins[t1] ?? 0;
   const w2 = series.wins[t2] ?? 0;
   const highlighted = highlightTeams.includes(t1) || highlightTeams.includes(t2);
-  const eliminated = (team: string) => series.isComplete && team !== series.leader;
+  const elim = (t: string) => series.isComplete && t !== series.leader;
+  const leading = (t: string) => !series.isComplete && ((t === t1 && w1 > w2) || (t === t2 && w2 > w1));
 
   return (
-    <View style={[bkt.chip, { width }, highlighted && bkt.chipHighlighted]}>
+    <View style={[bkt.chip, highlighted && bkt.chipHighlighted, flex !== undefined && { flex }]}>
       {[t1, t2].map((team, i) => (
-        <View key={team} style={[bkt.teamRow, i === 0 && { borderBottomWidth: 1, borderBottomColor: '#2a2a2a' }]}>
-          <TeamLogo abbrev={team} size={18} />
-          <Text style={[bkt.teamAbbr, eliminated(team) && bkt.teamEliminated]}>{team}</Text>
-          <Text style={[bkt.winsNum,
-            !series.isComplete && (w1 > w2 ? team === t1 : team === t2) && bkt.winsLeading,
-            series.isComplete && team === series.leader && bkt.winsWon,
-          ]}>{series.wins[team] ?? 0}</Text>
+        <View key={team}>
+          {i === 1 && <View style={bkt.divider} />}
+          <View style={bkt.teamRow}>
+            <TeamLogo abbrev={team} size={15} />
+            <Text style={[bkt.teamAbbr, elim(team) && bkt.eliminated]}>{team}</Text>
+            <Text style={[bkt.wins,
+              series.isComplete && team === series.leader && bkt.winsWon,
+              leading(team) && bkt.winsLeading,
+            ]}>{series.wins[team] ?? 0}</Text>
+          </View>
         </View>
       ))}
     </View>
   );
 }
 
-// One column of the bracket: R1 (4) → Semis (2) → Conf Finals (1)
-// Returns the conference champion team abbreviation
-function ConferenceBracket({
-  r1, semis, confFinals, highlightTeams, chipW, align,
-}: {
-  r1: any[]; semis: any[]; confFinals: any;
-  highlightTeams: string[]; chipW: number; align: 'left' | 'right';
+// ── Vertical connector: 2 chips above merge into 1 below (or split) ──────────
+function MergeDown({ totalW }: { totalW: number }) {
+  const half = totalW / 2;
+  return (
+    <View style={{ height: 10, flexDirection: 'row' }}>
+      <View style={{ width: half, borderRightWidth: 1, borderBottomWidth: 1, borderColor: CONN }} />
+      <View style={{ width: half, borderLeftWidth: 1, borderBottomWidth: 1, borderColor: CONN }} />
+    </View>
+  );
+}
+function SplitDown({ totalW }: { totalW: number }) {
+  const half = totalW / 2;
+  return (
+    <View style={{ height: 10, flexDirection: 'row' }}>
+      <View style={{ width: half, borderRightWidth: 1, borderTopWidth: 1, borderColor: CONN }} />
+      <View style={{ width: half, borderLeftWidth: 1, borderTopWidth: 1, borderColor: CONN }} />
+    </View>
+  );
+}
+function LineDown({ w }: { w: number }) {
+  return <View style={{ height: 10, width: 1, alignSelf: 'center', backgroundColor: CONN }} />;
+}
+
+// ── Round row ─────────────────────────────────────────────────────────────────
+function RoundRow({ series, count, highlightTeams, label, labelColor }: {
+  series: any[]; count: number; highlightTeams: string[]; label: string; labelColor?: string;
 }) {
-  const ROUND_GAP  = 12;
-  const CHIP_H     = 56; // approximate chip height (2 rows × 28)
-  const CONN_COLOR = '#3a3a3a';
-
-  // Connector heights between rounds
-  // Between R1 pairs → Semis: each pair of chips connects to one semi
-  const pairH = CHIP_H + ROUND_GAP; // height occupied by one R1 chip + gap below it
-
+  const chips = Array.from({ length: count }, (_, i) => series[i] ?? null);
   return (
     <View>
-      {/* Conference label */}
-      <Text style={[bkt.confLabel, align === 'right' && { textAlign: 'right' }]}>
-        {align === 'left' ? 'EAST' : 'WEST'}
-      </Text>
-
-      {/* First Round — 4 series in two pairs */}
-      {[0, 1].map(pairIdx => {
-        const seriesA = r1[pairIdx * 2] ?? null;
-        const seriesB = r1[pairIdx * 2 + 1] ?? null;
-        const semi    = semis[pairIdx] ?? null;
-
-        return (
-          <View key={pairIdx} style={{ flexDirection: align === 'left' ? 'row' : 'row-reverse', marginBottom: ROUND_GAP * 2 }}>
-            {/* Two R1 chips with connector */}
-            <View>
-              <BracketChip series={seriesA} highlightTeams={highlightTeams} width={chipW} />
-              {/* Vertical connector down */}
-              <View style={{ height: ROUND_GAP, marginLeft: align === 'left' ? chipW - 1 : 0, marginRight: align === 'right' ? chipW - 1 : 0, width: 1, backgroundColor: CONN_COLOR }} />
-              <BracketChip series={seriesB} highlightTeams={highlightTeams} width={chipW} />
-            </View>
-
-            {/* Horizontal connector to semi */}
-            <View style={{ justifyContent: 'center' }}>
-              <View style={{ width: 8, height: 1, backgroundColor: CONN_COLOR }} />
-            </View>
-
-            {/* Semi chip */}
-            <View style={{ justifyContent: 'center' }}>
-              <BracketChip series={semi} highlightTeams={highlightTeams} width={chipW} />
-            </View>
-
-            {/* Horizontal connector to conf finals */}
-            <View style={{ justifyContent: 'center' }}>
-              <View style={{ width: 8, height: 1, backgroundColor: CONN_COLOR }} />
-            </View>
-
-            {/* Conf Finals — only render once (for pairIdx 0), span both pairs via alignment */}
-            {pairIdx === 0 && (
-              <View style={{ justifyContent: 'center' }}>
-                <BracketChip series={confFinals} highlightTeams={highlightTeams} width={chipW} />
-              </View>
-            )}
-          </View>
-        );
-      })}
+      <Text style={[bkt.roundLabel, labelColor ? { color: labelColor } : {}]}>{label}</Text>
+      <View style={{ flexDirection: 'row', gap: 3 }}>
+        {chips.map((s, i) => (
+          <BracketChip key={i} series={s} highlightTeams={highlightTeams} flex={1} />
+        ))}
+      </View>
     </View>
   );
 }
 
 function PlayoffBracket({ highlightTeams, season }: { highlightTeams: string[]; season: number }) {
-  const [rounds, setRounds]   = useState<any[]>([]);
-  const [playIn, setPlayIn]   = useState<any[]>([]);
+  const [rounds, setRounds] = useState<any[]>([]);
+  const [playIn, setPlayIn] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const screenW = Dimensions.get('window').width;
+  const usableW = screenW - 24;
 
   useEffect(() => {
     NBAService.getPlayoffBracket(season)
@@ -608,79 +597,75 @@ function PlayoffBracket({ highlightTeams, season }: { highlightTeams: string[]; 
   if (loading) return <ActivityIndicator color="#fff" style={{ marginTop: 40 }} />;
   if (!rounds.length) return <Text style={s.empty}>No playoff data available</Text>;
 
-  const r1 = rounds[0]?.series ?? [];
-  const r2 = rounds[1]?.series ?? [];
-  const r3 = rounds[2]?.series ?? [];
+  const r1    = rounds[0]?.series ?? [];
+  const r2    = rounds[1]?.series ?? [];
+  const r3    = rounds[2]?.series ?? [];
   const finals = rounds[3]?.series?.[0] ?? null;
 
-  const eastR1   = r1.filter(isEastSeries);
-  const westR1   = r1.filter((s: any) => !isEastSeries(s));
-  const eastSemi = r2.filter(isEastSeries);
-  const westSemi = r2.filter((s: any) => !isEastSeries(s));
-  const eastCF   = r3.find(isEastSeries) ?? null;
-  const westCF   = r3.find((s: any) => !isEastSeries(s)) ?? null;
+  const westPI = playIn.filter((s: any) => !isEastSeries(s));
+  const eastPI = playIn.filter(isEastSeries);
 
-  // Chip width: screen / 4 sections per side minus padding
-  const chipW = Math.floor((screenW - 48) / 4);
+  const westR1   = r1.filter((s: any) => !isEastSeries(s));
+  const eastR1   = r1.filter(isEastSeries);
+  const westSemi = r2.filter((s: any) => !isEastSeries(s));
+  const eastSemi = r2.filter(isEastSeries);
+  const westCF   = r3.filter((s: any) => !isEastSeries(s));
+  const eastCF   = r3.filter(isEastSeries);
 
   return (
     <ScrollView contentContainerStyle={{ padding: 12, paddingBottom: 40 }}>
 
-      {/* Play-In */}
-      {playIn.length > 0 && (
-        <View style={bkt.playInSection}>
-          <Text style={bkt.playInTitle}>Play-In Tournament</Text>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-            {playIn.map((s: any, i: number) => (
-              <BracketChip key={i} series={s} highlightTeams={highlightTeams} width={(screenW - 40) / 2} />
-            ))}
+      {/* ── WEST (top, flows down toward Finals) ── */}
+      <Text style={bkt.confTitle}>Western Conference</Text>
+
+      {westPI.length > 0 && (
+        <>
+          <RoundRow series={westPI} count={westPI.length} highlightTeams={highlightTeams} label="Play-In" labelColor="#a78bfa" />
+          <View style={{ height: 10, alignItems: 'center' }}>
+            <View style={{ flex: 1, width: 1, backgroundColor: CONN }} />
           </View>
-        </View>
+        </>
       )}
 
-      {/* Bracket header */}
-      <View style={bkt.confRow}>
-        <Text style={bkt.confHeader}>Eastern</Text>
-        <Text style={[bkt.confHeader, { textAlign: 'right' }]}>Western</Text>
+      <RoundRow series={westR1} count={4} highlightTeams={highlightTeams} label="First Round" />
+      <View style={{ flexDirection: 'row' }}>
+        <MergeDown totalW={usableW / 2} />
+        <MergeDown totalW={usableW / 2} />
       </View>
 
-      {/* Main bracket — East left, West right */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-        <View style={{ flexDirection: 'row', gap: 4 }}>
-          {/* East */}
-          <View>
-            {/* Round headers */}
-            <View style={bkt.roundHeaderRow}>
-              <Text style={[bkt.roundLabel, { width: chipW }]}>R1</Text>
-              <Text style={[bkt.roundLabel, { width: chipW }]}>Semis</Text>
-              <Text style={[bkt.roundLabel, { width: chipW }]}>Conf F</Text>
-            </View>
-            <ConferenceBracket
-              r1={eastR1} semis={eastSemi} confFinals={eastCF}
-              highlightTeams={highlightTeams} chipW={chipW} align="left"
-            />
-          </View>
+      <RoundRow series={westSemi} count={2} highlightTeams={highlightTeams} label="Conference Semifinals" />
+      <MergeDown totalW={usableW} />
 
-          {/* Finals column */}
-          <View style={bkt.finalsCol}>
-            <Text style={bkt.finalsLabel}>Finals</Text>
-            <BracketChip series={finals} highlightTeams={highlightTeams} width={chipW} />
-          </View>
+      <RoundRow series={westCF} count={1} highlightTeams={highlightTeams} label="Conference Finals" />
+      <LineDown w={usableW} />
 
-          {/* West (mirrored) */}
-          <View>
-            <View style={bkt.roundHeaderRow}>
-              <Text style={[bkt.roundLabel, { width: chipW, textAlign: 'right' }]}>Conf F</Text>
-              <Text style={[bkt.roundLabel, { width: chipW, textAlign: 'right' }]}>Semis</Text>
-              <Text style={[bkt.roundLabel, { width: chipW, textAlign: 'right' }]}>R1</Text>
-            </View>
-            <ConferenceBracket
-              r1={westR1} semis={westSemi} confFinals={westCF}
-              highlightTeams={highlightTeams} chipW={chipW} align="right"
-            />
+      {/* ── Finals (center) ── */}
+      <Text style={bkt.finalsTitle}>NBA Finals</Text>
+      <BracketChip series={finals} highlightTeams={highlightTeams} />
+      <LineDown w={usableW} />
+
+      {/* ── EAST (bottom, flows up toward Finals) ── */}
+      <RoundRow series={eastCF} count={1} highlightTeams={highlightTeams} label="Conference Finals" />
+      <SplitDown totalW={usableW} />
+
+      <RoundRow series={eastSemi} count={2} highlightTeams={highlightTeams} label="Conference Semifinals" />
+      <View style={{ flexDirection: 'row' }}>
+        <SplitDown totalW={usableW / 2} />
+        <SplitDown totalW={usableW / 2} />
+      </View>
+
+      <RoundRow series={eastR1} count={4} highlightTeams={highlightTeams} label="First Round" />
+
+      {eastPI.length > 0 && (
+        <>
+          <View style={{ height: 10, alignItems: 'center' }}>
+            <View style={{ flex: 1, width: 1, backgroundColor: CONN }} />
           </View>
-        </View>
-      </ScrollView>
+          <RoundRow series={eastPI} count={eastPI.length} highlightTeams={highlightTeams} label="Play-In" labelColor="#a78bfa" />
+        </>
+      )}
+
+      <Text style={[bkt.confTitle, { marginTop: 8 }]}>Eastern Conference</Text>
     </ScrollView>
   );
 }
@@ -1139,26 +1124,18 @@ const table = StyleSheet.create({
 const bkt = StyleSheet.create({
   chip:            { backgroundColor: '#1e1e1e', borderRadius: 8, overflow: 'hidden' },
   chipHighlighted: { borderWidth: 1.5, borderColor: '#4caf50' },
-  teamRow:         { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 6, paddingVertical: 5, gap: 5 },
+  divider:         { height: 1, backgroundColor: '#2a2a2a' },
+  teamRow:         { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 6, paddingVertical: 5, gap: 4 },
   teamAbbr:        { flex: 1, color: '#fff', fontSize: 11, fontWeight: '700' },
-  teamEliminated:  { color: '#444' },
-  winsNum:         { color: '#555', fontSize: 13, fontWeight: '700', minWidth: 14, textAlign: 'right' },
+  eliminated:      { color: '#444' },
+  wins:            { color: '#555', fontSize: 12, fontWeight: '700' },
   winsLeading:     { color: '#aaa' },
   winsWon:         { color: '#fff' },
-  tbd:             { color: '#444', fontSize: 11, padding: 8 },
+  tbd:             { color: '#333', fontSize: 10 },
 
-  confRow:         { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 },
-  confHeader:      { flex: 1, color: '#888', fontSize: 12, fontWeight: '700', textTransform: 'uppercase' },
-  confLabel:       { color: '#666', fontSize: 10, fontWeight: '700', textTransform: 'uppercase', marginBottom: 4 },
-
-  roundHeaderRow:  { flexDirection: 'row', marginBottom: 4, gap: 4 },
-  roundLabel:      { color: '#555', fontSize: 10, fontWeight: '600', textTransform: 'uppercase', textAlign: 'center' },
-
-  finalsCol:       { alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
-  finalsLabel:     { color: '#f59e0b', fontSize: 10, fontWeight: '700', textTransform: 'uppercase', marginBottom: 4, textAlign: 'center' },
-
-  playInSection:   { backgroundColor: '#1a1a1a', borderRadius: 12, padding: 12, marginBottom: 16 },
-  playInTitle:     { color: '#a78bfa', fontSize: 12, fontWeight: '700', textTransform: 'uppercase', marginBottom: 8 },
+  confTitle:       { color: '#888', fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6, marginTop: 4 },
+  roundLabel:      { color: '#555', fontSize: 9, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 },
+  finalsTitle:     { color: '#f59e0b', fontSize: 11, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 1, textAlign: 'center', marginBottom: 4 },
 });
 
 const modal = StyleSheet.create({
