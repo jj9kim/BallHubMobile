@@ -822,12 +822,15 @@ export default function GameScreen({ route }: Props) {
           )}
 
           {/* Playoff series badge */}
-          {isPlayoffs && boxscore.SeriesWins && (
+          {isPlayoffs && boxscore.PlayoffInfo && (
             <View style={s.seriesBadge}>
-              <Text style={s.seriesText}>
-                {game.AwayTeam} {boxscore.SeriesWins[game.AwayTeam] ?? 0} – {boxscore.SeriesWins[game.HomeTeam] ?? 0} {game.HomeTeam}
+              <Text style={s.seriesRound}>
+                {boxscore.PlayoffInfo.roundName} · Game {boxscore.PlayoffInfo.gameNumber}
               </Text>
-              <Text style={s.seriesSubtext}>Series Record</Text>
+              <Text style={s.seriesText}>
+                {game.AwayTeam} {boxscore.PlayoffInfo.winsAway} – {boxscore.PlayoffInfo.winsHome} {game.HomeTeam}
+              </Text>
+              <Text style={s.seriesSubtext}>{boxscore.PlayoffInfo.seriesLabel}</Text>
             </View>
           )}
 
@@ -918,9 +921,10 @@ const s = StyleSheet.create({
   quarterLabel: { color: '#555', fontSize: 10, fontWeight: '600', flex: 1, textAlign: 'center' },
   quarterTeam:  { color: '#888', fontSize: 10, fontWeight: '700', flex: 1 },
   quarterScore: { color: '#888', fontSize: 10, flex: 1, textAlign: 'center' },
-  seriesBadge:  { marginTop: 4, alignItems: 'center', backgroundColor: '#252525', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 5 },
-  seriesText:   { color: '#fff', fontSize: 13, fontWeight: '700' },
-  seriesSubtext:{ color: '#666', fontSize: 10, marginTop: 1 },
+  seriesBadge:  { marginTop: 4, alignItems: 'center', backgroundColor: '#252525', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6, gap: 2 },
+  seriesRound:  { color: '#f59e0b', fontSize: 11, fontWeight: '700' },
+  seriesText:   { color: '#fff', fontSize: 14, fontWeight: '800' },
+  seriesSubtext:{ color: '#888', fontSize: 11 },
 });
 
 const logo = StyleSheet.create({

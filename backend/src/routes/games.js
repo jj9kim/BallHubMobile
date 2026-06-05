@@ -12,12 +12,88 @@ import {
 
 const router = Router();
 
+// Helper: build playoff series info for a specific game
+async function getSeriesInfoForGame(game, bracket) {
+  const away = game.AwayTeam;
+  const home = game.HomeTeam;
+  const key = [away, home].sort().join('-');
+
+  for (const round of bracket.rounds) {
+    const series = round.series.find(s => [...s.teams].sort().join('-') === key);
+    if (!series) continue;
+
+    // Sort series games by date to find game number
+    const completedStatuses = ['Final', 'F/OT', 'F/2OT', 'F/3OT'];
+    const seriesGames = series.games
+      .filter(g => completedStatuses.includes(g.Status) || g.Status === 'NotNecessary')
+      .sort((a, b) => new Date(a.Day) - new Date(b.Day));
+
+    // Find this game's index
+    const thisGameDate = game.Day?.split('T')[0];
+    const thisGameIdx = seriesGames.findIndex(g => {
+      const d = g.Day?.split('T')[0];
+      return d === thisGameDate &&
+        ((g.AwayTeam === away && g.HomeTeam === home) ||
+         (g.AwayTeam === home && g.HomeTeam === away));
+    });
+
+    const gameNumber = thisGameIdx >= 0 ? thisGameIdx + 1 : seriesGames.length;
+
+    // Count wins from games played BEFORE this game
+    const gamesBeforeThis = seriesGames.slice(0, Math.max(0, thisGameIdx));
+    let preAway = 0, preHome = 0;
+    for (const g of gamesBeforeThis) {
+      if (!completedStatuses.includes(g.Status)) continue;
+      if (g.HomeTeamScore > g.AwayTeamScore) {
+        if (g.HomeTeam === home) preHome++; else preAway++;
+      } else {
+        if (g.AwayTeam === away) preAway++; else preHome++;
+      }
+    }
+
+    // Final series record
+    const winsAway = series.wins[away] ?? 0;
+    const winsHome = series.wins[home] ?? 0;
+
+    // Series status label (record entering this game)
+    let seriesLabel;
+    if (preAway === preHome && preAway === 0) seriesLabel = `Game 1`;
+    else if (preAway === preHome) seriesLabel = `Series tied ${preAway}-${preHome}`;
+    else if (preAway > preHome) seriesLabel = `${away} leads ${preAway}-${preHome}`;
+    else seriesLabel = `${home} leads ${preHome}-${preAway}`;
+
+    return {
+      roundName: round.name,
+      gameNumber,
+      seriesLabel,
+      winsAway,
+      winsHome,
+      isComplete: series.isComplete,
+      leader: series.leader,
+    };
+  }
+  return null;
+}
+
 // GET /api/games?date=YYYY-MM-DD
 router.get('/', async (req, res) => {
   try {
     const { date } = req.query;
     if (!date) return res.status(400).json({ success: false, error: 'date query param required (YYYY-MM-DD)' });
     const games = await getGamesByDate(date);
+
+    // Enrich playoff games with series info
+    const playoffGames = games.filter(g => g.SeasonType === 3);
+    if (playoffGames.length > 0) {
+      const season = playoffGames[0].Season;
+      const bracket = await getPlayoffBracket(season);
+      for (const game of games) {
+        if (game.SeasonType !== 3) continue;
+        const info = await getSeriesInfoForGame(game, bracket);
+        if (info) game.PlayoffInfo = info;
+      }
+    }
+
     res.json({ success: true, games, count: games.length });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
@@ -34,7 +110,7 @@ router.get('/live', async (req, res) => {
   }
 });
 
-// GET /api/games/schedule/:season  e.g. /api/games/schedule/2025
+// GET /api/games/schedule/:season
 router.get('/schedule/:season', async (req, res) => {
   try {
     const games = await getSchedule(req.params.season);
@@ -59,18 +135,10 @@ router.get('/:id', async (req, res) => {
 router.get('/:id/boxscore', async (req, res) => {
   try {
     const boxscore = await getBoxScore(req.params.id);
-    // If playoff game, calculate series record
     if (boxscore?.Game?.SeasonType === 3) {
       const bracket = await getPlayoffBracket(boxscore.Game.Season);
-      const away = boxscore.Game.AwayTeam;
-      const home = boxscore.Game.HomeTeam;
-      const key = [away, home].sort().join('-');
-      let seriesWins = null;
-      for (const round of bracket.rounds) {
-        const s = round.series.find(s => s.teams.sort().join('-') === key);
-        if (s) { seriesWins = s.wins; break; }
-      }
-      if (seriesWins) boxscore.SeriesWins = seriesWins;
+      const info = await getSeriesInfoForGame(boxscore.Game, bracket);
+      if (info) boxscore.PlayoffInfo = info;
     }
     res.json({ success: true, boxscore });
   } catch (err) {
@@ -78,7 +146,7 @@ router.get('/:id/boxscore', async (req, res) => {
   }
 });
 
-// GET /api/games/:id/players  — all player stats for a game
+// GET /api/games/:id/players
 router.get('/:id/players', async (req, res) => {
   try {
     const boxscore = await getBoxScore(req.params.id);

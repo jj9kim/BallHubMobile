@@ -1,8 +1,19 @@
 // ── Types ─────────────────────────────────────────────────────────────────────
 
+export interface PlayoffInfo {
+  roundName: string;
+  gameNumber: number;
+  seriesLabel: string;
+  winsAway: number;
+  winsHome: number;
+  isComplete: boolean;
+  leader: string;
+}
+
 export interface Game {
   GameID: number;
   Season: number;
+  SeasonType: number;
   Status: string;
   Day: string;
   DateTime: string;
@@ -17,6 +28,7 @@ export interface Game {
   TimeRemainingSeconds: number | null;
   Attendance: number | null;
   Channel: string | null;
+  PlayoffInfo?: PlayoffInfo;
 }
 
 export interface Standing {

@@ -109,8 +109,8 @@ async function fetchPlayoffGames(season) {
   // Season 2025 = games played in 2024-25, playoffs in spring 2025
   const year = season; // season 2025 = calendar year 2025 for playoffs
   const months = ['APR','MAY','JUN'];
-  const monthDays = { APR: 30, MAY: 31, JUN: 25 };
-  const startDay =  { APR: 15, MAY: 1,  JUN: 1 };
+  const monthDays = { APR: 30, MAY: 31, JUN: 30 };
+  const startDay =  { APR: 13, MAY: 1,  JUN: 1 };
 
   const playoffGames = [];
   for (const month of months) {
@@ -154,19 +154,22 @@ export async function getPlayoffBracket(season = 2025) {
   const series = filteredSeries.map(s => {
     const wins = {};
     s.teams.forEach(t => wins[t] = 0);
+    const completedStatuses = ['Final', 'F/OT', 'F/2OT', 'F/3OT'];
     for (const g of s.games) {
-      if (g.Status !== 'Final') continue;
+      if (!completedStatuses.includes(g.Status)) continue;
       if (g.HomeTeamScore > g.AwayTeamScore) wins[g.HomeTeam] = (wins[g.HomeTeam] || 0) + 1;
       else wins[g.AwayTeam] = (wins[g.AwayTeam] || 0) + 1;
     }
     const [t1, t2] = s.teams;
-    const isComplete = wins[t1] >= 4 || wins[t2] >= 4;
+    const isComplete = wins[t1] >= 4 || wins[t2] >= 4 ||
+      s.games.some(g => g.Status === 'NotNecessary');
     const leader = wins[t1] >= wins[t2] ? t1 : t2;
     const trailer = leader === t1 ? t2 : t1;
     return {
       teams: s.teams,
       wins,
-      gamesPlayed: s.games.filter(g => g.Status === 'Final').length,
+      games: s.games, // keep raw games for game # calculation
+      gamesPlayed: s.games.filter(g => completedStatuses.includes(g.Status)).length,
       isComplete,
       leader,
       trailer,

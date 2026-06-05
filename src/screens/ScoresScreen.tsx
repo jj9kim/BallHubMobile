@@ -258,8 +258,17 @@ function GameCard({ game, onPress }: { game: Game; onPress: () => void }) {
       <View style={styles.statusRow}>
         {isLive && <View style={styles.liveDot} />}
         <Text style={[styles.statusLabel, isLive && styles.liveLabel]}>{statusLabel}</Text>
-        {game.Channel ? <Text style={styles.channelText}>{game.Channel}</Text> : null}
+        <View style={{ flex: 1 }} />
+        {game.PlayoffInfo && (
+          <Text style={styles.playoffLabel}>
+            {game.PlayoffInfo.roundName} · Game {game.PlayoffInfo.gameNumber}
+          </Text>
+        )}
+        {!game.PlayoffInfo && game.Channel ? <Text style={styles.channelText}>{game.Channel}</Text> : null}
       </View>
+      {game.PlayoffInfo && (
+        <Text style={styles.seriesLabel}>{game.PlayoffInfo.seriesLabel}</Text>
+      )}
     </TouchableOpacity>
   );
 }
@@ -433,6 +442,8 @@ const styles = StyleSheet.create({
   statusLabel:      { color: '#555', fontSize: 12, fontWeight: '500', flex: 1 },
   liveLabel:        { color: '#4caf50', fontWeight: '700' },
   channelText:      { color: '#444', fontSize: 11 },
+  playoffLabel:     { color: '#f59e0b', fontSize: 11, fontWeight: '700' },
+  seriesLabel:      { color: '#888', fontSize: 11, marginTop: 4 },
   logoFallback:     { borderRadius: 6, alignItems: 'center', justifyContent: 'center' },
   logoFallbackText: { color: '#fff', fontWeight: '800' },
 
