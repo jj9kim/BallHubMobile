@@ -4,10 +4,12 @@ export interface PlayoffInfo {
   roundName: string;
   gameNumber: number;
   seriesLabel: string;
+  postSeriesLabel: string;
   winsAway: number;
   winsHome: number;
   isComplete: boolean;
   leader: string;
+  isPlayIn: boolean;
 }
 
 export interface Game {
@@ -157,7 +159,7 @@ export const NBAService = {
 
   // Playoffs
   getPlayoffBracket: (season = 2025) =>
-    apiFetch<{ rounds: any[]; totalSeries: number }>(`/api/games/playoffs/${season}`),
+    apiFetch<{ rounds: any[]; playIn: any[]; totalSeries: number }>(`/api/games/playoffs/${season}`),
 
   // Standings
   getStandings: (season = 2025) =>

@@ -18,9 +18,15 @@ async function getSeriesInfoForGame(game, bracket) {
   const home = game.HomeTeam;
   const key = [away, home].sort().join('-');
 
-  for (const round of bracket.rounds) {
-    const series = round.series.find(s => [...s.teams].sort().join('-') === key);
-    if (!series) continue;
+  // Check play-in first
+  const playInMatch = (bracket.playIn ?? []).find(s => [...s.teams].sort().join('-') === key);
+  const allSeries = [
+    ...(bracket.playIn ?? []).map(s => ({ ...s, roundName: 'Play-In' })),
+    ...bracket.rounds.flatMap(r => r.series.map(s => ({ ...s, roundName: r.name }))),
+  ];
+
+  for (const series of allSeries) {
+    if ([...series.teams].sort().join('-') !== key) continue;
 
     // Sort series games by date to find game number
     const completedStatuses = ['Final', 'F/OT', 'F/2OT', 'F/3OT'];
@@ -55,21 +61,35 @@ async function getSeriesInfoForGame(game, bracket) {
     const winsAway = series.wins[away] ?? 0;
     const winsHome = series.wins[home] ?? 0;
 
-    // Series status label (record entering this game)
+    // Series label ENTERING this game
     let seriesLabel;
     if (preAway === preHome && preAway === 0) seriesLabel = `Game 1`;
     else if (preAway === preHome) seriesLabel = `Series tied ${preAway}-${preHome}`;
     else if (preAway > preHome) seriesLabel = `${away} leads ${preAway}-${preHome}`;
     else seriesLabel = `${home} leads ${preHome}-${preAway}`;
 
+    // Series record AFTER this game (pre + this game's result)
+    const completedGame = completedStatuses.includes(game.Status);
+    const postAway = preAway + (completedGame && game.AwayTeamScore > game.HomeTeamScore ? 1 : 0);
+    const postHome = preHome + (completedGame && game.HomeTeamScore > game.AwayTeamScore ? 1 : 0);
+
+    let postSeriesLabel;
+    if (postAway >= 4) postSeriesLabel = `${away} wins ${postAway}-${postHome}`;
+    else if (postHome >= 4) postSeriesLabel = `${home} wins ${postHome}-${postAway}`;
+    else if (postAway === postHome) postSeriesLabel = `Series tied ${postAway}-${postHome}`;
+    else if (postAway > postHome) postSeriesLabel = `${away} leads ${postAway}-${postHome}`;
+    else postSeriesLabel = `${home} leads ${postHome}-${postAway}`;
+
     return {
-      roundName: round.name,
+      roundName: series.roundName,
       gameNumber,
       seriesLabel,
+      postSeriesLabel,
       winsAway,
       winsHome,
       isComplete: series.isComplete,
       leader: series.leader,
+      isPlayIn: series.isPlayIn ?? false,
     };
   }
   return null;
@@ -80,10 +100,12 @@ router.get('/', async (req, res) => {
   try {
     const { date } = req.query;
     if (!date) return res.status(400).json({ success: false, error: 'date query param required (YYYY-MM-DD)' });
-    const games = await getGamesByDate(date);
+    const allGames = await getGamesByDate(date);
+    // Filter out unplayed games (series already decided)
+    const games = allGames.filter(g => g.Status !== 'NotNecessary');
 
     // Enrich playoff games with series info
-    const playoffGames = games.filter(g => g.SeasonType === 3);
+    const playoffGames = games.filter(g => g.SeasonType === 3 && g.Status !== 'NotNecessary');
     if (playoffGames.length > 0) {
       const season = playoffGames[0].Season;
       const bracket = await getPlayoffBracket(season);

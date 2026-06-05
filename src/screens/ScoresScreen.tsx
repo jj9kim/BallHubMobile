@@ -260,14 +260,20 @@ function GameCard({ game, onPress }: { game: Game; onPress: () => void }) {
         <Text style={[styles.statusLabel, isLive && styles.liveLabel]}>{statusLabel}</Text>
         <View style={{ flex: 1 }} />
         {game.PlayoffInfo && (
-          <Text style={styles.playoffLabel}>
-            {game.PlayoffInfo.roundName} · Game {game.PlayoffInfo.gameNumber}
+          <Text style={[styles.playoffLabel, game.PlayoffInfo.isPlayIn && styles.playInLabel]}>
+            {game.PlayoffInfo.isPlayIn
+              ? 'Play-In'
+              : `${game.PlayoffInfo.roundName} · Game ${game.PlayoffInfo.gameNumber}`}
           </Text>
         )}
         {!game.PlayoffInfo && game.Channel ? <Text style={styles.channelText}>{game.Channel}</Text> : null}
       </View>
       {game.PlayoffInfo && (
-        <Text style={styles.seriesLabel}>{game.PlayoffInfo.seriesLabel}</Text>
+        <Text style={styles.seriesLabel}>
+          {isFinal
+            ? game.PlayoffInfo.postSeriesLabel
+            : game.PlayoffInfo.seriesLabel}
+        </Text>
       )}
     </TouchableOpacity>
   );
@@ -443,6 +449,7 @@ const styles = StyleSheet.create({
   liveLabel:        { color: '#4caf50', fontWeight: '700' },
   channelText:      { color: '#444', fontSize: 11 },
   playoffLabel:     { color: '#f59e0b', fontSize: 11, fontWeight: '700' },
+  playInLabel:      { color: '#a78bfa' },
   seriesLabel:      { color: '#888', fontSize: 11, marginTop: 4 },
   logoFallback:     { borderRadius: 6, alignItems: 'center', justifyContent: 'center' },
   logoFallbackText: { color: '#fff', fontWeight: '800' },

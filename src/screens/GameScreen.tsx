@@ -530,12 +530,17 @@ function SeriesCard({ series, highlightTeams }: { series: any; highlightTeams: s
 }
 
 function PlayoffBracket({ highlightTeams, season }: { highlightTeams: string[]; season: number }) {
-  const [rounds, setRounds] = useState<any[]>([]);
+  const [rounds, setRounds]   = useState<any[]>([]);
+  const [playIn, setPlayIn]   = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     NBAService.getPlayoffBracket(season)
-      .then(res => { setRounds(res.rounds ?? []); setLoading(false); })
+      .then(res => {
+        setRounds(res.rounds ?? []);
+        setPlayIn(res.playIn ?? []);
+        setLoading(false);
+      })
       .catch(() => setLoading(false));
   }, [season]);
 
@@ -544,6 +549,19 @@ function PlayoffBracket({ highlightTeams, season }: { highlightTeams: string[]; 
 
   return (
     <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
+      {/* Play-In section */}
+      {playIn.length > 0 && (
+        <View>
+          <View style={[bracket.roundHeader, { borderLeftWidth: 3, borderLeftColor: '#a78bfa' }]}>
+            <Text style={[bracket.roundTitle, { color: '#a78bfa' }]}>Play-In Tournament</Text>
+          </View>
+          {playIn.map((series: any, i: number) => (
+            <SeriesCard key={i} series={series} highlightTeams={highlightTeams} />
+          ))}
+        </View>
+      )}
+
+      {/* Playoff rounds */}
       {rounds.map(round => (
         <View key={round.round}>
           <View style={bracket.roundHeader}>
@@ -922,7 +940,7 @@ const s = StyleSheet.create({
   quarterTeam:  { color: '#888', fontSize: 10, fontWeight: '700', flex: 1 },
   quarterScore: { color: '#888', fontSize: 10, flex: 1, textAlign: 'center' },
   seriesBadge:  { marginTop: 4, alignItems: 'center', backgroundColor: '#252525', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6, gap: 2 },
-  seriesRound:  { color: '#f59e0b', fontSize: 11, fontWeight: '700' },
+  seriesRound:  { color: '#f59e0b', fontSize: 11, fontWeight: '700', textAlign: 'center' },
   seriesText:   { color: '#fff', fontSize: 14, fontWeight: '800' },
   seriesSubtext:{ color: '#888', fontSize: 11 },
 });

@@ -147,8 +147,34 @@ export async function getPlayoffBracket(season = 2025) {
     if (g.Day < seriesMap[key].firstGameDate) seriesMap[key].firstGameDate = g.Day;
   }
 
-  // Filter out Play-In series (only 1-2 games = not a best-of-7 series)
-  const filteredSeries = Object.values(seriesMap).filter(s => s.games.length >= 3);
+  const allSeriesList = Object.values(seriesMap);
+  // Play-In series have 1-2 games; real playoff series have 3+
+  const playInSeriesList  = allSeriesList.filter(s => s.games.length <= 2);
+  const filteredSeries    = allSeriesList.filter(s => s.games.length >= 3);
+
+  // Build play-in objects
+  const playInSeries = playInSeriesList.map(s => {
+    const completedStatuses = ['Final', 'F/OT', 'F/2OT', 'F/3OT'];
+    const wins = {};
+    s.teams.forEach(t => wins[t] = 0);
+    for (const g of s.games) {
+      if (!completedStatuses.includes(g.Status)) continue;
+      if (g.HomeTeamScore > g.AwayTeamScore) wins[g.HomeTeam] = (wins[g.HomeTeam] || 0) + 1;
+      else wins[g.AwayTeam] = (wins[g.AwayTeam] || 0) + 1;
+    }
+    const [t1, t2] = s.teams;
+    const winner = (wins[t1] ?? 0) >= 1 ? t1 : t2;
+    return {
+      teams: s.teams,
+      wins,
+      games: s.games,
+      gamesPlayed: s.games.filter(g => completedStatuses.includes(g.Status)).length,
+      isComplete: s.games.some(g => g.Status === 'NotNecessary') || s.games.some(g => completedStatuses.includes(g.Status)),
+      winner,
+      firstGameDate: s.firstGameDate,
+      isPlayIn: true,
+    };
+  });
 
   // Build series objects with wins, status, game #
   const series = filteredSeries.map(s => {
@@ -189,5 +215,5 @@ export async function getPlayoffBracket(season = 2025) {
     if (chunk.length > 0) rounds.push({ round: i + 1, name: roundNames[i], series: chunk });
   }
 
-  return { rounds, totalSeries: series.length };
+  return { rounds, playIn: playInSeries, totalSeries: series.length };
 }
