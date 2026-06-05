@@ -143,6 +143,10 @@ export const NBAService = {
   getPlayersByGame: (id: number) =>
     apiFetch<{ players: PlayerGameStats[] }>(`/api/games/${id}/players`),
 
+  // Playoffs
+  getPlayoffBracket: (season = 2025) =>
+    apiFetch<{ rounds: any[]; totalSeries: number }>(`/api/games/playoffs/${season}`),
+
   // Standings
   getStandings: (season = 2025) =>
     apiFetch<{ standings: Standing[] }>(`/api/standings/${season}`),
@@ -156,6 +160,10 @@ export const NBAService = {
 
   getTeamSchedule: (team: string, season = 2025) =>
     apiFetch<{ games: Game[] }>(`/api/teams/${team}/schedule/${season}`),
+
+  // Player ID map (SportsData → NbaDotCom)
+  getNbaIdMap: () =>
+    apiFetch<{ map: Record<number, number> }>('/api/players/nba-id-map'),
 
   // Players
   getPlayerById: (id: number) =>

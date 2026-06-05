@@ -8,7 +8,7 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { NBAService, Game } from '../api/nbaService';
-import { teamFullNames, teamColors } from '../utils/teamMappings';
+import { teamFullNames, teamColors, teamLogoUri } from '../utils/teamMappings';
 import type { RootStackParamList } from '../navigation';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -201,7 +201,7 @@ function TeamLogo({ abbrev, size = 36 }: { abbrev: string; size?: number }) {
   }
   return (
     <Image
-      source={{ uri: `https://a.espncdn.com/i/teamlogos/nba/500/${abbrev.toLowerCase()}.png` }}
+      source={{ uri: teamLogoUri(abbrev) }}
       style={{ width: size, height: size }}
       resizeMode="contain"
       onError={() => setFailed(true)}

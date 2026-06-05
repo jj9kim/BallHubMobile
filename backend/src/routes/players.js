@@ -19,6 +19,22 @@ router.get('/', async (req, res) => {
   }
 });
 
+// GET /api/players/nba-id-map — maps SportsData PlayerID → NbaDotComPlayerID
+router.get('/nba-id-map', async (req, res) => {
+  try {
+    const players = await getAllPlayers();
+    const map = {};
+    players.forEach(p => {
+      if (p.PlayerID && p.NbaDotComPlayerID) {
+        map[p.PlayerID] = p.NbaDotComPlayerID;
+      }
+    });
+    res.json({ success: true, map });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // GET /api/players/season-stats/:season  — all players' season averages
 router.get('/season-stats/:season', async (req, res) => {
   try {

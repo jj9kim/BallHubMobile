@@ -7,6 +7,7 @@ import {
   getTeamSchedule,
   getBoxScore,
   getPlayerStatsByDate,
+  getPlayoffBracket,
 } from '../services/sportsData.js';
 
 const router = Router();
@@ -58,6 +59,19 @@ router.get('/:id', async (req, res) => {
 router.get('/:id/boxscore', async (req, res) => {
   try {
     const boxscore = await getBoxScore(req.params.id);
+    // If playoff game, calculate series record
+    if (boxscore?.Game?.SeasonType === 3) {
+      const bracket = await getPlayoffBracket(boxscore.Game.Season);
+      const away = boxscore.Game.AwayTeam;
+      const home = boxscore.Game.HomeTeam;
+      const key = [away, home].sort().join('-');
+      let seriesWins = null;
+      for (const round of bracket.rounds) {
+        const s = round.series.find(s => s.teams.sort().join('-') === key);
+        if (s) { seriesWins = s.wins; break; }
+      }
+      if (seriesWins) boxscore.SeriesWins = seriesWins;
+    }
     res.json({ success: true, boxscore });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
@@ -70,6 +84,16 @@ router.get('/:id/players', async (req, res) => {
     const boxscore = await getBoxScore(req.params.id);
     const players = boxscore?.PlayerGames ?? [];
     res.json({ success: true, players, count: players.length });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// GET /api/games/playoffs/:season
+router.get('/playoffs/:season', async (req, res) => {
+  try {
+    const data = await getPlayoffBracket(Number(req.params.season));
+    res.json({ success: true, ...data });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
