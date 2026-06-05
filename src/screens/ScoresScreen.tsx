@@ -8,7 +8,7 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { NBAService, Game } from '../api/nbaService';
-import { teamFullNames, teamColors, teamLogoUri } from '../utils/teamMappings';
+import { teamFullNames, teamColors, teamLogoUri, teamCities, teamNicknames } from '../utils/teamMappings';
 import type { RootStackParamList } from '../navigation';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -212,6 +212,7 @@ function TeamLogo({ abbrev, size = 36 }: { abbrev: string; size?: number }) {
 // ── Game card ─────────────────────────────────────────────────────────────────
 
 function GameCard({ game, onPress }: { game: Game; onPress: () => void }) {
+  const navigation  = useNavigation<Nav>();
   const isLive      = NBAService.isLive(game);
   const isFinal     = NBAService.isFinal(game);
   const isScheduled = NBAService.isScheduled(game);

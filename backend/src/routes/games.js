@@ -43,7 +43,9 @@ async function getSeriesInfoForGame(game, bracket) {
          (g.AwayTeam === home && g.HomeTeam === away));
     });
 
-    const gameNumber = thisGameIdx >= 0 ? thisGameIdx + 1 : seriesGames.length;
+    // Use SeriesInfo.GameNumber from SportsData if available (always accurate for future games too)
+    const gameNumber = game.SeriesInfo?.GameNumber
+      ?? (thisGameIdx >= 0 ? thisGameIdx + 1 : seriesGames.length + 1);
 
     // Count wins from games played BEFORE this game
     const gamesBeforeThis = seriesGames.slice(0, Math.max(0, thisGameIdx));
@@ -63,8 +65,7 @@ async function getSeriesInfoForGame(game, bracket) {
 
     // Series label ENTERING this game
     let seriesLabel;
-    if (preAway === preHome && preAway === 0) seriesLabel = `Game 1`;
-    else if (preAway === preHome) seriesLabel = `Series tied ${preAway}-${preHome}`;
+    if (preAway === preHome) seriesLabel = `Series tied ${preAway}-${preHome}`;
     else if (preAway > preHome) seriesLabel = `${away} leads ${preAway}-${preHome}`;
     else seriesLabel = `${home} leads ${preHome}-${preAway}`;
 

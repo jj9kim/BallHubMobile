@@ -8,11 +8,13 @@ import { Ionicons } from '@expo/vector-icons';
 import ScoresScreen from '../screens/ScoresScreen';
 import GameScreen from '../screens/GameScreen';
 import TeamsScreen from '../screens/TeamsScreen';
+import TeamScreen from '../screens/TeamScreen';
 import PlayersScreen from '../screens/PlayersScreen';
 
 export type RootStackParamList = {
   MainTabs: undefined;
   Game: { gameId: number; gameDate: string };
+  TeamProfile: { teamKey: string; teamCity: string; teamName: string };
 };
 
 export type TabParamList = {
@@ -70,6 +72,18 @@ export default function Navigation() {
             headerTintColor: '#fff',
             headerTitle: '',
             headerBackTitle: 'Games',
+            headerShadowVisible: false,
+          }}
+        />
+        <Stack.Screen
+          name="TeamProfile"
+          component={TeamScreen}
+          options={{
+            headerShown: true,
+            headerStyle: { backgroundColor: '#141414' },
+            headerTintColor: '#fff',
+            headerTitle: '',
+            headerBackTitle: 'Teams',
             headerShadowVisible: false,
           }}
         />

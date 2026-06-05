@@ -1,18 +1,61 @@
 import axios from 'axios';
 import NodeCache from 'node-cache';
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
 
-const cache = new NodeCache();
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const CACHE_DIR  = join(__dirname, '../../../cache');
+if (!existsSync(CACHE_DIR)) mkdirSync(CACHE_DIR, { recursive: true });
+
+const memCache = new NodeCache();
 
 const client = axios.create({
   baseURL: 'https://api.sportsdata.io/v3/nba',
   params: { key: process.env.SPORTS_DATA_KEY },
 });
 
+// ── File cache helpers ────────────────────────────────────────────────────────
+
+function fileKey(path) {
+  return path.replace(/[^a-zA-Z0-9]/g, '_') + '.json';
+}
+
+function readDiskCache(path) {
+  const file = join(CACHE_DIR, fileKey(path));
+  if (!existsSync(file)) return undefined;
+  try {
+    const { data, expires } = JSON.parse(readFileSync(file, 'utf8'));
+    if (Date.now() < expires) return data;
+  } catch {}
+  return undefined;
+}
+
+function writeDiskCache(path, data, ttl) {
+  const file = join(CACHE_DIR, fileKey(path));
+  try {
+    writeFileSync(file, JSON.stringify({ data, expires: Date.now() + ttl * 1000 }));
+  } catch {}
+}
+
+// ── API fetch with 2-layer cache (memory → disk → API) ───────────────────────
+
 async function apiFetch(path, ttl = 300) {
-  const hit = cache.get(path);
-  if (hit !== undefined) return hit;
+  // 1. Memory cache (fastest)
+  const memHit = memCache.get(path);
+  if (memHit !== undefined) return memHit;
+
+  // 2. Disk cache (survives server restarts)
+  const diskHit = readDiskCache(path);
+  if (diskHit !== undefined) {
+    memCache.set(path, diskHit, ttl);
+    return diskHit;
+  }
+
+  // 3. Real API call
   const { data } = await client.get(path);
-  cache.set(path, data, ttl);
+  memCache.set(path, data, ttl);
+  writeDiskCache(path, data, ttl);
   return data;
 }
 
@@ -42,7 +85,7 @@ export async function getLiveGames() {
 }
 
 export async function getSchedule(season) {
-  return apiFetch(`/scores/json/Games/${season}`, 3600);
+  return apiFetch(`/scores/json/Games/${season}`, 86400);
 }
 
 export async function getTeamSchedule(season, team) {
@@ -105,31 +148,44 @@ export async function getAllPlayerSeasonStats(season) {
 // ── Playoffs ──────────────────────────────────────────────────────────────────
 
 async function fetchPlayoffGames(season) {
-  // Build date range: Apr 15 → Jun 25 of the season year
-  // Season 2025 = games played in 2024-25, playoffs in spring 2025
-  const year = season; // season 2025 = calendar year 2025 for playoffs
-  const months = ['APR','MAY','JUN'];
-  const monthDays = { APR: 30, MAY: 31, JUN: 30 };
-  const startDay =  { APR: 13, MAY: 1,  JUN: 1 };
+  // GamesByDate is the only endpoint that returns SeasonType=3 games.
+  // We fetch Apr 12 → today only (not all the way to Jun 30).
+  // Past dates are cached to disk for 30 days — effectively permanent during the season.
+  // Today is cached for 5 min so live games stay fresh.
+  const MONTHS = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+  const today  = new Date();
+  const start  = new Date(season, 3, 12);  // Apr 12 of the season year
+  const end    = new Date(Math.min(new Date(season, 5, 25).getTime(), today.getTime()));
 
   const playoffGames = [];
-  for (const month of months) {
-    const start = startDay[month];
-    const end   = monthDays[month];
-    // Fetch every day — results are cached 24h so cost is paid once
-    for (let day = start; day <= end; day++) {
-      const dateStr = `${year}-${month}-${String(day).padStart(2,'0')}`;
-      try {
-        const games = await apiFetch(`/scores/json/GamesByDate/${dateStr}`, 86400);
-        playoffGames.push(...games.filter(g => g.SeasonType === 3));
-      } catch (e) { /* skip */ }
-    }
+  const cur = new Date(start);
+  while (cur <= end) {
+    const mm  = MONTHS[cur.getMonth()];
+    const dd  = String(cur.getDate()).padStart(2, '0');
+    const key = `/scores/json/GamesByDate/${season}-${mm}-${dd}`;
+    const isToday = cur.toDateString() === today.toDateString();
+    const ttl = isToday ? 300 : 86400 * 30;  // past dates: 30-day cache
+    try {
+      const games = await apiFetch(key, ttl);
+      playoffGames.push(...games.filter(g => g.SeasonType === 3));
+    } catch {}
+    cur.setDate(cur.getDate() + 1);
   }
   return playoffGames;
 }
 
 export async function getPlayoffBracket(season = 2025) {
-  const playoffGames = await fetchPlayoffGames(season);
+  const [playoffGames, standingsData] = await Promise.all([
+    fetchPlayoffGames(season),
+    apiFetch(`/scores/json/Standings/${season}`, 86400),
+  ]);
+
+  // Build seed map from standings: teamAbbr → conference rank (= playoff seed)
+  const seedMap = {};
+  const east = standingsData.filter(t => t.Conference === 'Eastern').sort((a, b) => b.Percentage - a.Percentage);
+  const west = standingsData.filter(t => t.Conference === 'Western').sort((a, b) => b.Percentage - a.Percentage);
+  east.forEach((t, i) => { seedMap[t.Key] = i + 1; });
+  west.forEach((t, i) => { seedMap[t.Key] = i + 1; });
 
   // Exclude Play-In games (series with only 1-2 games between same teams)
   // First group all games, then keep only series with 3+ games OR that look like real playoff series
@@ -141,16 +197,75 @@ export async function getPlayoffBracket(season = 2025) {
         teams: [g.AwayTeam, g.HomeTeam].sort(),
         games: [],
         firstGameDate: g.Day,
+        seeds: {},
       };
     }
     seriesMap[key].games.push(g);
     if (g.Day < seriesMap[key].firstGameDate) seriesMap[key].firstGameDate = g.Day;
+    // Populate seeds from standings-derived seedMap (game fields are always null)
+    if (seedMap[g.AwayTeam]) seriesMap[key].seeds[g.AwayTeam] = seedMap[g.AwayTeam];
+    if (seedMap[g.HomeTeam]) seriesMap[key].seeds[g.HomeTeam] = seedMap[g.HomeTeam];
   }
 
   const allSeriesList = Object.values(seriesMap);
-  // Play-In series have 1-2 games; real playoff series have 3+
-  const playInSeriesList  = allSeriesList.filter(s => s.games.length <= 2);
-  const filteredSeries    = allSeriesList.filter(s => s.games.length >= 3);
+
+  // Play-In involves only seeds 7-10 (min seed of the matchup >= 7).
+  // Fall back to game count only when seed data isn't available.
+  function isPlayIn(s) {
+    const seedVals = Object.values(s.seeds);
+    if (seedVals.length >= 2) return Math.min(...seedVals) >= 7;
+    return s.games.length <= 2; // fallback
+  }
+
+  const playInSeriesList = allSeriesList.filter(s => isPlayIn(s));
+  const filteredSeries   = allSeriesList.filter(s => !isPlayIn(s));
+
+  // ── Fix Play-In seeds ─────────────────────────────────────────────────────
+  // After Play-In: winner of 7v8 earns seed 7, winner of Decider earns seed 8.
+  // Override standings-based seeds so R1 chips show the correct bracket position.
+  const DONE = ['Final', 'F/OT', 'F/2OT', 'F/3OT'];
+  const EAST_SET = new Set(['ATL','BOS','BKN','CHA','CHI','CLE','DET','IND','MIA','MIL','NY','ORL','PHI','TOR','WAS']);
+
+  function rawWinner(s) {
+    const wins = {};
+    s.teams.forEach(t => wins[t] = 0);
+    for (const g of s.games) {
+      if (!DONE.includes(g.Status)) continue;
+      if (g.HomeTeamScore > g.AwayTeamScore) wins[g.HomeTeam] = (wins[g.HomeTeam] || 0) + 1;
+      else wins[g.AwayTeam] = (wins[g.AwayTeam] || 0) + 1;
+    }
+    const anyDone = s.games.some(g => DONE.includes(g.Status));
+    if (!anyDone) return null;
+    const [t1, t2] = s.teams;
+    return (wins[t1] ?? 0) >= (wins[t2] ?? 0) ? t1 : t2;
+  }
+
+  for (const conf of ['east', 'west']) {
+    const confPI = playInSeriesList.filter(s =>
+      conf === 'east' ? EAST_SET.has(s.teams[0]) : !EAST_SET.has(s.teams[0])
+    );
+    if (confPI.length < 2) continue;
+
+    // Latest game by date = Decider; earlier two = Round 1
+    const byDate  = [...confPI].sort((a, b) => a.firstGameDate.localeCompare(b.firstGameDate));
+    const decider = byDate[byDate.length - 1];
+    const r1PI    = byDate.slice(0, byDate.length - 1);
+
+    // Among Round 1 games, lowest min-seed = 7v8
+    const minSeedOf = s => Math.min(...Object.values(s.seeds).filter(Boolean), 99);
+    r1PI.sort((a, b) => minSeedOf(a) - minSeedOf(b));
+    const game78 = r1PI[0];
+
+    const w78  = game78 ? rawWinner(game78)  : null;
+    const wDec = decider ? rawWinner(decider) : null;
+    if (w78)  seedMap[w78]  = 7;   // winner of 7v8 → bracket seed 7
+    if (wDec) seedMap[wDec] = 8;   // winner of decider → bracket seed 8
+
+    // Only re-stamp seeds on R1 series — Play-In chips keep their original seeds
+    for (const s of filteredSeries) {
+      s.teams.forEach(t => { if (seedMap[t] != null) s.seeds[t] = seedMap[t]; });
+    }
+  }
 
   // Build play-in objects
   const playInSeries = playInSeriesList.map(s => {
@@ -167,6 +282,7 @@ export async function getPlayoffBracket(season = 2025) {
     return {
       teams: s.teams,
       wins,
+      seeds: s.seeds,
       games: s.games,
       gamesPlayed: s.games.filter(g => completedStatuses.includes(g.Status)).length,
       isComplete: s.games.some(g => g.Status === 'NotNecessary') || s.games.some(g => completedStatuses.includes(g.Status)),
@@ -194,7 +310,8 @@ export async function getPlayoffBracket(season = 2025) {
     return {
       teams: s.teams,
       wins,
-      games: s.games, // keep raw games for game # calculation
+      seeds: s.seeds,
+      games: s.games,
       gamesPlayed: s.games.filter(g => completedStatuses.includes(g.Status)).length,
       isComplete,
       leader,
