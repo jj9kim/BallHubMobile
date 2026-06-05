@@ -72,10 +72,11 @@ async function getSeriesInfoForGame(game, bracket) {
     const completedGame = completedStatuses.includes(game.Status);
     const postAway = preAway + (completedGame && game.AwayTeamScore > game.HomeTeamScore ? 1 : 0);
     const postHome = preHome + (completedGame && game.HomeTeamScore > game.AwayTeamScore ? 1 : 0);
+    const winThreshold = series.isPlayIn ? 1 : 4;
 
     let postSeriesLabel;
-    if (postAway >= 4) postSeriesLabel = `${away} wins ${postAway}-${postHome}`;
-    else if (postHome >= 4) postSeriesLabel = `${home} wins ${postHome}-${postAway}`;
+    if (postAway >= winThreshold) postSeriesLabel = `${away} advances ${postAway}-${postHome}`;
+    else if (postHome >= winThreshold) postSeriesLabel = `${home} advances ${postHome}-${postAway}`;
     else if (postAway === postHome) postSeriesLabel = `Series tied ${postAway}-${postHome}`;
     else if (postAway > postHome) postSeriesLabel = `${away} leads ${postAway}-${postHome}`;
     else postSeriesLabel = `${home} leads ${postHome}-${postAway}`;
