@@ -205,7 +205,7 @@ export const NBAService = {
     game.Status === 'InProgress',
 
   isFinal: (game: Game): boolean =>
-    game.Status === 'Final',
+    game.Status === 'Final' || game.Status === 'F/OT' || game.Status === 'F/2OT' || game.Status === 'F/3OT',
 
   isScheduled: (game: Game): boolean =>
     game.Status === 'Scheduled',

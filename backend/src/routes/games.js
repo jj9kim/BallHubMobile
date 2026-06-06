@@ -6,9 +6,8 @@ import {
   getSchedule,
   getTeamSchedule,
   getBoxScore,
-  getPlayerStatsByDate,
   getPlayoffBracket,
-} from '../services/sportsData.js';
+} from '../services/nbaApiService.js';
 
 const router = Router();
 
@@ -34,11 +33,21 @@ async function getSeriesInfoForGame(game, bracket) {
       .filter(g => completedStatuses.includes(g.Status) || g.Status === 'NotNecessary')
       .sort((a, b) => new Date(a.Day) - new Date(b.Day));
 
-    // Find this game's index
+    // Find this game's index — tolerate ±1 day since ESPN dates may be UTC-shifted
     const thisGameDate = game.Day?.split('T')[0];
+    const adjacentDates = (d) => {
+      if (!d) return [];
+      const base = new Date(d + 'T12:00:00Z');
+      return [-1, 0, 1].map(offset => {
+        const dt = new Date(base);
+        dt.setUTCDate(dt.getUTCDate() + offset);
+        return dt.toISOString().split('T')[0];
+      });
+    };
+    const dates = new Set(adjacentDates(thisGameDate));
     const thisGameIdx = seriesGames.findIndex(g => {
       const d = g.Day?.split('T')[0];
-      return d === thisGameDate &&
+      return dates.has(d) &&
         ((g.AwayTeam === away && g.HomeTeam === home) ||
          (g.AwayTeam === home && g.HomeTeam === away));
     });
@@ -64,13 +73,16 @@ async function getSeriesInfoForGame(game, bracket) {
     const winsHome = series.wins[home] ?? 0;
 
     // Series label ENTERING this game
+    // For scheduled/future games, use overall series wins (pre-game counts are 0 since game isn't in completed list)
+    const completedGame = completedStatuses.includes(game.Status);
+    const labelAway = completedGame ? preAway : winsAway;
+    const labelHome = completedGame ? preHome : winsHome;
     let seriesLabel;
-    if (preAway === preHome) seriesLabel = `Series tied ${preAway}-${preHome}`;
-    else if (preAway > preHome) seriesLabel = `${away} leads ${preAway}-${preHome}`;
-    else seriesLabel = `${home} leads ${preHome}-${preAway}`;
+    if (labelAway === labelHome) seriesLabel = `Series tied ${labelAway}-${labelHome}`;
+    else if (labelAway > labelHome) seriesLabel = `${away} leads ${labelAway}-${labelHome}`;
+    else seriesLabel = `${home} leads ${labelHome}-${labelAway}`;
 
     // Series record AFTER this game (pre + this game's result)
-    const completedGame = completedStatuses.includes(game.Status);
     const postAway = preAway + (completedGame && game.AwayTeamScore > game.HomeTeamScore ? 1 : 0);
     const postHome = preHome + (completedGame && game.HomeTeamScore > game.AwayTeamScore ? 1 : 0);
     const winThreshold = series.isPlayIn ? 1 : 4;

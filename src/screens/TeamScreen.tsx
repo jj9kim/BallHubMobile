@@ -1,10 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, SafeAreaView, ScrollView,
-  TouchableOpacity, Image, ActivityIndicator,
+  TouchableOpacity, Image, ActivityIndicator, Dimensions,
 } from 'react-native';
-import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import Svg, { Line, Circle, Rect, Path } from 'react-native-svg';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp, NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation';
+
+type Nav = NativeStackNavigationProp<RootStackParamList>;
 import { NBAService, Standing, Game, Player } from '../api/nbaService';
 import { teamLogoUri, teamColors } from '../utils/teamMappings';
 
@@ -50,125 +54,325 @@ function TabBar({ active, onChange }: { active: Tab; onChange: (t: Tab) => void 
   );
 }
 
+// ── Half-court with starters ──────────────────────────────────────────────────
+
+const POS_MAP: Record<string, { x: number; y: number }> = {
+  PG: { x: 50, y: 75 },
+  SG: { x: 22, y: 58 },
+  SF: { x: 78, y: 58 },
+  PF: { x: 28, y: 30 },
+  C:  { x: 50, y: 18 },
+};
+const POS_ORDER = ['PG','SG','SF','PF','C'];
+
+function StarterPin({ player, x, y, courtW, courtH, nbaIdMap }: {
+  player: any; x: number; y: number; courtW: number; courtH: number;
+  nbaIdMap: Record<number,number>;
+}) {
+  const [failed, setFailed] = useState(false);
+  const left  = (x / 100) * courtW;
+  const top   = (y / 100) * courtH;
+  const nbaid = nbaIdMap[player.PlayerID];
+  const uri   = nbaid ? `https://cdn.nba.com/headshots/nba/latest/1040x760/${nbaid}.png` : player.PhotoUrl;
+
+  return (
+    <View style={{ position: 'absolute', left: left - 22, top: top - 28, alignItems: 'center', width: 44 }}>
+      <View style={{ width: 38, height: 38, borderRadius: 19, overflow: 'hidden', borderWidth: 2, borderColor: '#fff', backgroundColor: '#333' }}>
+        {!failed && uri ? (
+          <Image source={{ uri }} style={{ width: '100%', height: '100%' }} resizeMode="cover" onError={() => setFailed(true)} />
+        ) : (
+          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: teamColors[player.Team] ?? '#555' }}>
+            <Text style={{ color: '#fff', fontSize: 10, fontWeight: '800' }}>{player.LastName?.slice(0, 2)}</Text>
+          </View>
+        )}
+      </View>
+      <Text style={{ color: '#fff', fontSize: 8, fontWeight: '600', marginTop: 2 }} numberOfLines={1}>
+        #{player.Jersey} {player.LastName}
+      </Text>
+    </View>
+  );
+}
+
+function HalfCourt({ starters, nbaIdMap }: { starters: any[]; nbaIdMap: Record<number,number> }) {
+  const courtW = Dimensions.get('window').width - 48;
+  const courtH = courtW * 0.85;
+  const POS_ORDER_LOCAL = ['C','PF','SF','SG','PG'];
+
+  const assigned: { player: any; x: number; y: number }[] = [];
+  const used = new Set<string>();
+
+  starters.forEach(p => {
+    const pos = (p.Position ?? '').toUpperCase();
+    if (POS_MAP[pos] && !used.has(pos)) {
+      assigned.push({ player: p, ...POS_MAP[pos] });
+      used.add(pos);
+    }
+  });
+  starters.forEach(p => {
+    if (assigned.find(a => a.player.PlayerID === p.PlayerID)) return;
+    const pos = POS_ORDER.find(po => !used.has(po)) ?? 'PG';
+    assigned.push({ player: p, ...POS_MAP[pos] });
+    used.add(pos);
+  });
+
+  return (
+    <View style={{ width: courtW, height: courtH, backgroundColor: '#2c2c2c', borderRadius: 12, overflow: 'hidden' }}>
+      <Svg width={courtW} height={courtH} style={{ position: 'absolute' }}>
+        <Rect x={2} y={2} width={courtW-4} height={courtH-4} stroke="#3a3a3a" strokeWidth={2} fill="none" />
+        <Line x1={0} y1={courtH} x2={courtW} y2={courtH} stroke="#3a3a3a" strokeWidth={2} />
+        <Rect x={courtW*0.29} y={0} width={courtW*0.42} height={courtH*0.36} stroke="#3a3a3a" strokeWidth={2} fill="none" />
+        <Circle cx={courtW*0.5} cy={courtH*0.36} r={courtW*0.13} stroke="#3a3a3a" strokeWidth={2} fill="none" />
+        <Path
+          d={`M ${courtW*0.09} 0 L ${courtW*0.09} ${courtH*0.38} A ${courtW*0.43} ${courtW*0.43} 0 0 0 ${courtW*0.91} ${courtH*0.38} L ${courtW*0.91} 0`}
+          stroke="#3a3a3a" strokeWidth={2} fill="none"
+        />
+      </Svg>
+      {assigned.map(({ player, x, y }) => (
+        <StarterPin key={player.PlayerID} player={player} x={x} y={y} courtW={courtW} courtH={courtH} nbaIdMap={nbaIdMap} />
+      ))}
+    </View>
+  );
+}
+
+// ── Season Stats computed from schedule ───────────────────────────────────────
+
+function computeSeasonStats(games: Game[], teamKey: string) {
+  const finished = games.filter(isGameFinal);
+  if (finished.length === 0) return null;
+  let totalPts = 0, totalOpp = 0, homeW = 0, homeL = 0, awayW = 0, awayL = 0;
+  finished.forEach(g => {
+    const isHome  = g.HomeTeam === teamKey;
+    const my  = isHome ? g.HomeTeamScore : g.AwayTeamScore;
+    const opp = isHome ? g.AwayTeamScore : g.HomeTeamScore;
+    totalPts += my; totalOpp += opp;
+    if (isHome) { my > opp ? homeW++ : homeL++; }
+    else        { my > opp ? awayW++ : awayL++; }
+  });
+  return {
+    ppg:    (totalPts / finished.length).toFixed(1),
+    oppPpg: (totalOpp / finished.length).toFixed(1),
+    homeRec: `${homeW}-${homeL}`,
+    awayRec: `${awayW}-${awayL}`,
+    gp:     finished.length,
+  };
+}
+
 // ── Overview Tab ──────────────────────────────────────────────────────────────
 
 function OverviewTab({ teamKey, standing, allStandings }: {
   teamKey: string; standing: Standing | null; allStandings: Standing[];
 }) {
-  const [schedule, setSchedule] = useState<Game[]>([]);
-  const [loading, setLoading]   = useState(true);
+  const [schedule, setSchedule]       = useState<Game[]>([]);
+  const [starters, setStarters]       = useState<any[]>([]);
+  const [nbaIdMap, setNbaIdMap]       = useState<Record<number,number>>({});
+  const [loading, setLoading]         = useState(true);
+  const [statsOrLineup, setStatsOrLineup] = useState<'stats' | 'lineup'>('stats');
 
   useEffect(() => {
     NBAService.getTeamSchedule(teamKey)
-      .then(res => { setSchedule(res.games ?? []); setLoading(false); })
+      .then(async res => {
+        const games = res.games ?? [];
+        setSchedule(games);
+        const lastGame = [...games].filter(isGameFinal).pop();
+        if (lastGame) {
+          const [boxRes, mapRes] = await Promise.all([
+            NBAService.getBoxScore(lastGame.GameID),
+            NBAService.getNbaIdMap(),
+          ]);
+          const players: any[] = boxRes.boxscore?.PlayerGames ?? [];
+          setStarters(players.filter(p => p.Team === teamKey && p.Started === 1));
+          setNbaIdMap(mapRes.map ?? {});
+        }
+        setLoading(false);
+      })
       .catch(() => setLoading(false));
   }, [teamKey]);
 
-  const played = schedule.filter(g => isGameFinal(g)).slice(-5);
-  const next   = schedule.find(g => isGameScheduled(g) || (!isGameFinal(g) && g.Status !== 'InProgress'));
-
-  const color  = teamColors[teamKey] ?? '#555';
-  const confStandings = allStandings
-    .filter(t => t.Conference === standing?.Conference)
-    .sort((a, b) => b.Percentage - a.Percentage);
-  const confLeader = confStandings[0];
+  const last5  = schedule.filter(isGameFinal).slice(-5);
+  const next   = schedule.find(g => !isGameFinal(g) && g.Status !== 'InProgress' && g.Status !== 'NotNecessary');
+  const sorted = [...allStandings].sort((a, b) => b.Percentage - a.Percentage);
+  const seasonStats = computeSeasonStats(schedule, teamKey);
 
   return (
-    <ScrollView contentContainerStyle={{ padding: 16, gap: 20, paddingBottom: 40 }}>
+    <ScrollView contentContainerStyle={{ paddingHorizontal: 12, paddingTop: 12, paddingBottom: 40, gap: 10 }}>
 
-      {/* Record card */}
-      {standing && (
-        <View style={s.card}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-around' }}>
-            {[
-              { label: 'Record',    value: `${standing.Wins}-${standing.Losses}` },
-              { label: 'Conf Rank', value: `#${standing.ConferenceRank}` },
-              { label: 'PCT',       value: standing.Percentage.toFixed(3) },
-              { label: 'GB',        value: calcGB(confLeader, standing) },
-            ].map(({ label, value }) => (
-              <View key={label} style={{ alignItems: 'center' }}>
-                <Text style={s.statVal}>{value}</Text>
-                <Text style={s.statLabel}>{label}</Text>
-              </View>
-            ))}
-          </View>
-          <View style={{ marginTop: 14, flexDirection: 'row', justifyContent: 'space-around' }}>
-            {[
-              { label: 'Home',    value: `${standing.HomeWins}-${standing.HomeLosses}` },
-              { label: 'Away',    value: `${standing.AwayWins}-${standing.AwayLosses}` },
-              { label: 'L10',     value: `${standing.LastTenWins}-${standing.LastTenLosses}` },
-              { label: 'Streak',  value: standing.StreakDescription ?? '—' },
-            ].map(({ label, value }) => (
-              <View key={label} style={{ alignItems: 'center' }}>
-                <Text style={s.statVal}>{value}</Text>
-                <Text style={s.statLabel}>{label}</Text>
-              </View>
-            ))}
-          </View>
-        </View>
-      )}
-
-      {/* Next game */}
-      {next && (
-        <View>
-          <Text style={s.sectionTitle}>Next Game</Text>
-          <View style={s.card}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-              <View style={{ alignItems: 'center', gap: 4 }}>
-                <TeamLogo abbrev={next.AwayTeam} size={40} />
-                <Text style={s.gameTeamAbbr}>{next.AwayTeam}</Text>
-              </View>
-              <View style={{ alignItems: 'center' }}>
-                <Text style={s.vsText}>vs</Text>
-                {next.DateTime && (
-                  <Text style={s.gameTime}>
-                    {new Date(next.DateTime).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
-                  </Text>
-                )}
-                {next.DateTime && (
-                  <Text style={s.gameTime}>
-                    {new Date(next.DateTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
-                  </Text>
-                )}
-              </View>
-              <View style={{ alignItems: 'center', gap: 4 }}>
-                <TeamLogo abbrev={next.HomeTeam} size={40} />
-                <Text style={s.gameTeamAbbr}>{next.HomeTeam}</Text>
-              </View>
-            </View>
-          </View>
-        </View>
-      )}
-
-      {/* Last 5 games */}
-      {loading ? <ActivityIndicator color="#fff" /> : played.length > 0 && (
-        <View>
-          <Text style={s.sectionTitle}>Last {played.length} Games</Text>
-          <View style={s.card}>
-            {played.map((g, i) => {
-              const isHome  = g.HomeTeam === teamKey;
-              const opp     = isHome ? g.AwayTeam : g.HomeTeam;
-              const myScore = isHome ? g.HomeTeamScore : g.AwayTeamScore;
-              const oppScore= isHome ? g.AwayTeamScore : g.HomeTeamScore;
-              const won     = myScore > oppScore;
+      {/* ── Team Form ── */}
+      <View style={s.card}>
+        <Text style={s.sectionLabel}>Team Form</Text>
+        {loading ? (
+          <ActivityIndicator color="#fff" style={{ marginVertical: 16 }} />
+        ) : last5.length === 0 ? (
+          <Text style={s.emptyText}>No recent games</Text>
+        ) : (
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 12 }}>
+            {last5.map(g => {
+              const isHome   = g.HomeTeam === teamKey;
+              const myScore  = isHome ? g.HomeTeamScore : g.AwayTeamScore;
+              const oppScore = isHome ? g.AwayTeamScore : g.HomeTeamScore;
+              const won      = myScore > oppScore;
+              const opp      = isHome ? g.AwayTeam : g.HomeTeam;
               return (
-                <View key={g.GameID} style={[s.gameRow, i > 0 && { borderTopWidth: 1, borderTopColor: '#2a2a2a', marginTop: 10, paddingTop: 10 }]}>
-                  <Text style={[s.wlBadge, won ? s.wBadge : s.lBadge]}>{won ? 'W' : 'L'}</Text>
-                  <TeamLogo abbrev={opp} size={22} />
-                  <Text style={s.gameOpp}>{isHome ? 'vs' : '@'} {opp}</Text>
-                  <Text style={[s.gameScore, won ? s.winner : s.loser]}>{myScore} – {oppScore}</Text>
+                <View key={g.GameID} style={{ alignItems: 'center', gap: 7 }}>
+                  <TeamLogo abbrev={opp} size={32} />
+                  <View style={[s.wlDot, { backgroundColor: won ? '#1a3a1a' : '#3a1a1a', borderColor: won ? '#4caf50' : '#e05a5a' }]}>
+                    <Text style={[{ fontSize: 10, fontWeight: '800' }, won ? s.winnerText : s.loserText]}>{won ? 'W' : 'L'}</Text>
+                  </View>
+                  <Text style={s.formScore}>{myScore}–{oppScore}</Text>
                 </View>
               );
             })}
           </View>
+        )}
+      </View>
+
+      {/* ── Next Match ── */}
+      <View style={s.card}>
+        <Text style={s.sectionLabel}>Next Match</Text>
+        {next ? (
+          <View style={{ marginTop: 12 }}>
+            {/* Away team row */}
+            <View style={s.matchupRow}>
+              <TeamLogo abbrev={next.AwayTeam} size={32} />
+              <View style={{ marginLeft: 10, flex: 1 }}>
+                <Text style={s.teamAbbr}>{next.AwayTeam}</Text>
+                <Text style={s.rowTeamName}>{next.AwayTeam === teamKey ? 'Away' : ''}</Text>
+              </View>
+              {next.AwayTeam === teamKey && <Text style={s.atLabel}>AWAY</Text>}
+            </View>
+            <View style={s.divider} />
+            {/* Home team row */}
+            <View style={s.matchupRow}>
+              <TeamLogo abbrev={next.HomeTeam} size={32} />
+              <View style={{ marginLeft: 10, flex: 1 }}>
+                <Text style={s.teamAbbr}>{next.HomeTeam}</Text>
+              </View>
+              {next.HomeTeam === teamKey && <Text style={s.atLabel}>HOME</Text>}
+            </View>
+            {/* Date/time footer */}
+            {next.DateTime && (
+              <View style={[s.divider, { marginBottom: 8 }]} />
+            )}
+            {next.DateTime && (
+              <Text style={s.matchDateText}>
+                {new Date(next.DateTime).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                {'  ·  '}
+                {new Date(next.DateTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
+              </Text>
+            )}
+          </View>
+        ) : (
+          <Text style={[s.emptyText, { marginTop: 10 }]}>No upcoming games</Text>
+        )}
+      </View>
+
+      {/* ── Season Stats / Last Starting 5 ── */}
+      <View style={s.card}>
+        {/* Toggle — same chip style used across the app */}
+        <View style={s.segRow}>
+          {(['stats', 'lineup'] as const).map(tab => (
+            <TouchableOpacity
+              key={tab}
+              style={[s.segChip, statsOrLineup === tab && s.segChipActive]}
+              onPress={() => setStatsOrLineup(tab)}
+            >
+              <Text style={[s.segChipText, statsOrLineup === tab && s.segChipTextActive]}>
+                {tab === 'stats' ? 'Season Stats' : 'Last Starting 5'}
+              </Text>
+            </TouchableOpacity>
+          ))}
         </View>
-      )}
+
+        {statsOrLineup === 'stats' ? (
+          loading ? (
+            <ActivityIndicator color="#fff" style={{ marginVertical: 24 }} />
+          ) : seasonStats ? (
+            <View style={{ marginTop: 14 }}>
+              {[
+                [{ val: seasonStats.ppg, label: 'PPG' }, { val: seasonStats.oppPpg, label: 'OPP PPG' }, { val: String(seasonStats.gp), label: 'GP' }],
+                [{ val: seasonStats.homeRec, label: 'Home' }, { val: seasonStats.awayRec, label: 'Away' }, { val: standing ? standing.Percentage.toFixed(3) : '—', label: 'Win%' }],
+              ].map((row, ri) => (
+                <View key={ri}>
+                  {ri > 0 && <View style={s.divider} />}
+                  <View style={{ flexDirection: 'row', paddingVertical: 12 }}>
+                    {row.map(({ val, label }, ci) => (
+                      <View key={label} style={[{ flex: 1, alignItems: 'center' }, ci > 0 && { borderLeftWidth: 1, borderLeftColor: '#2a2a2a' }]}>
+                        <Text style={s.statNum}>{val}</Text>
+                        <Text style={s.statLabel}>{label}</Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              ))}
+              {standing?.StreakDescription && (
+                <>
+                  <View style={s.divider} />
+                  <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 10, gap: 8 }}>
+                    <Text style={s.statLabel}>Streak</Text>
+                    <Text style={[s.statNum, { fontSize: 15 }, standing.StreakDescription.startsWith('W') ? s.winnerText : s.loserText]}>
+                      {standing.StreakDescription}
+                    </Text>
+                  </View>
+                </>
+              )}
+            </View>
+          ) : (
+            <Text style={[s.emptyText, { marginTop: 16 }]}>No stats available</Text>
+          )
+        ) : (
+          loading ? (
+            <ActivityIndicator color="#fff" style={{ marginVertical: 24 }} />
+          ) : starters.length > 0 ? (
+            <View style={{ marginTop: 12, alignItems: 'center' }}>
+              <HalfCourt starters={starters} nbaIdMap={nbaIdMap} />
+            </View>
+          ) : (
+            <Text style={[s.emptyText, { marginTop: 16 }]}>No lineup data</Text>
+          )
+        )}
+      </View>
+
+      {/* ── League Standings ── */}
+      <View style={s.card}>
+        <Text style={s.sectionLabel}>League Standings</Text>
+        {/* Header row */}
+        <View style={[s.standRow, { marginTop: 10, paddingBottom: 6, borderBottomWidth: 1, borderBottomColor: '#2a2a2a' }]}>
+          <Text style={[s.standRank, { color: '#555' }]}>#</Text>
+          <Text style={[s.standTeam, { color: '#555' }]}>Team</Text>
+          {['W','L','PCT','GB','STK'].map(h => <Text key={h} style={[s.standStat, { color: '#555' }]}>{h}</Text>)}
+        </View>
+        {sorted.map((t, i) => {
+          const streak = t.StreakDescription ?? '';
+          const isMe   = t.Key === teamKey;
+          const gb     = i === 0 ? '—' : calcGB(sorted[0], t);
+          return (
+            <View key={t.TeamID} style={[s.standRow, { paddingVertical: 7 }, isMe && s.standRowHighlight]}>
+              <Text style={[s.standRank, !isMe && { color: '#555' }]}>{i + 1}</Text>
+              <View style={s.standTeam}>
+                <TeamLogo abbrev={t.Key} size={20} />
+                <Text style={[s.rowTeamName, { fontSize: 13 }, !isMe && { color: '#aaa', fontWeight: '500' }]} numberOfLines={1}>
+                  {t.Name}
+                </Text>
+              </View>
+              <Text style={[s.standStat, isMe && { color: '#fff' }]}>{t.Wins}</Text>
+              <Text style={[s.standStat, isMe && { color: '#fff' }]}>{t.Losses}</Text>
+              <Text style={[s.standStat, isMe && { color: '#fff' }]}>{t.Percentage.toFixed(3)}</Text>
+              <Text style={[s.standStat, isMe && { color: '#fff' }]}>{gb}</Text>
+              <Text style={[s.standStat, streak.startsWith('W') ? s.winnerText : s.loserText]}>{streak}</Text>
+            </View>
+          );
+        })}
+      </View>
 
     </ScrollView>
   );
 }
 
 // ── Roster Tab ────────────────────────────────────────────────────────────────
+
+function fmtHeight(inches: number): string {
+  if (!inches) return '—';
+  return `${Math.floor(inches / 12)}'${inches % 12}"`;
+}
 
 function calcAge(birthDate: string): string {
   if (!birthDate) return '—';
@@ -179,6 +383,7 @@ function calcAge(birthDate: string): string {
 function PlayerRow({ player: p, teamKey, alt, nbaIdMap }: {
   player: Player; teamKey: string; alt: boolean; nbaIdMap: Record<number, number>;
 }) {
+  const navigation = useNavigation<Nav>();
   const [imgFailed, setImgFailed] = useState(false);
   const nbaid    = nbaIdMap[p.PlayerID];
   const photoUri = nbaid
@@ -186,7 +391,11 @@ function PlayerRow({ player: p, teamKey, alt, nbaIdMap }: {
     : p.PhotoUrl ?? null;
 
   return (
-    <View style={[s.rosterRow, alt && { backgroundColor: '#191919' }]}>
+    <TouchableOpacity
+      style={[s.rosterRow, alt && { backgroundColor: '#191919' }]}
+      onPress={() => navigation.navigate('PlayerProfile', { playerId: p.PlayerID })}
+      activeOpacity={0.7}
+    >
       <Text style={[s.rosterCell, { width: 32, color: '#555' }]}>{p.Jersey ?? '—'}</Text>
       <View style={[s.rosterCell, { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 }]}>
         <View style={{ width: 36, height: 36, borderRadius: 18, overflow: 'hidden', backgroundColor: '#2a2a2a' }}>
@@ -201,10 +410,10 @@ function PlayerRow({ player: p, teamKey, alt, nbaIdMap }: {
         <Text style={{ color: '#fff', fontSize: 12, fontWeight: '600', flex: 1 }} numberOfLines={1}>{p.FirstName} {p.LastName}</Text>
       </View>
       <Text style={s.rosterCell}>{p.Position ?? '—'}</Text>
-      <Text style={s.rosterCell}>{p.Height ?? '—'}</Text>
+      <Text style={s.rosterCell}>{fmtHeight(p.Height)}</Text>
       <Text style={s.rosterCell}>{p.Weight ?? '—'}</Text>
       <Text style={s.rosterCell}>{calcAge(p.BirthDate)}</Text>
-    </View>
+    </TouchableOpacity>
   );
 }
 
@@ -391,27 +600,49 @@ const s = StyleSheet.create({
   tabLabelActive: { color: '#fff' },
   tabUnderline:   { position: 'absolute', bottom: 0, left: '20%', right: '20%', height: 2, backgroundColor: '#fff', borderRadius: 1 },
 
-  sectionTitle:   { color: '#888', fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 },
+  // ── shared card / row language ──────────────────────────────────────────────
+  card:           { backgroundColor: '#1e1e1e', borderRadius: 14, paddingHorizontal: 14, paddingTop: 14, paddingBottom: 12 },
+  sectionLabel:   { color: '#aaa', fontSize: 11, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 },
+  sectionTitle:   { color: '#aaa', fontSize: 11, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 },
+  divider:        { height: 1, backgroundColor: '#2a2a2a', marginVertical: 4 },
+  emptyText:      { color: '#555', fontSize: 14 },
 
-  card:           { backgroundColor: '#1e1e1e', borderRadius: 14, padding: 16 },
-  statVal:        { color: '#fff', fontSize: 18, fontWeight: '700', textAlign: 'center' },
-  statLabel:      { color: '#666', fontSize: 11, fontWeight: '600', textTransform: 'uppercase', marginTop: 2 },
+  teamAbbr:       { color: '#aaa', fontSize: 11, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 },
+  rowTeamName:    { color: '#fff', fontSize: 15, fontWeight: '700', marginTop: 1 },
+  winnerText:     { color: '#fff', fontWeight: '800' },
+  loserText:      { color: '#555' },
 
-  gameRow:        { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  gameOpp:        { flex: 1, color: '#ccc', fontSize: 13, fontWeight: '500' },
-  gameScore:      { fontSize: 13, fontWeight: '700' },
-  gameTeamAbbr:   { color: '#aaa', fontSize: 12, fontWeight: '700' },
-  vsText:         { color: '#555', fontSize: 16, fontWeight: '700' },
-  gameTime:       { color: '#888', fontSize: 11, textAlign: 'center' },
-  wlBadge:        { width: 22, height: 22, borderRadius: 4, alignItems: 'center', justifyContent: 'center' },
-  wBadge:         { backgroundColor: '#1a3a1a' },
-  lBadge:         { backgroundColor: '#3a1a1a' },
-  winner:         { color: '#4caf50' },
-  loser:          { color: '#e05a5a' },
+  // ── team form ────────────────────────────────────────────────────────────────
+  wlDot:          { width: 22, height: 22, borderRadius: 11, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
+  formScore:      { color: '#555', fontSize: 10, fontWeight: '500' },
 
+  // ── next match ───────────────────────────────────────────────────────────────
+  matchupRow:     { flexDirection: 'row', alignItems: 'center', paddingVertical: 6 },
+  atLabel:        { color: '#555', fontSize: 11, fontWeight: '600' },
+  matchDateText:  { color: '#555', fontSize: 12, fontWeight: '500' },
+
+  // ── season stats / lineup toggle ─────────────────────────────────────────────
+  segRow:         { flexDirection: 'row', gap: 8 },
+  segChip:        { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, backgroundColor: '#242424' },
+  segChipActive:  { backgroundColor: '#fff' },
+  segChipText:    { color: '#777', fontSize: 13, fontWeight: '500' },
+  segChipTextActive: { color: '#000', fontWeight: '700' },
+
+  statNum:        { color: '#fff', fontSize: 18, fontWeight: '700' },
+  statLabel:      { color: '#555', fontSize: 12, fontWeight: '500', marginTop: 2 },
+
+  // ── standings ────────────────────────────────────────────────────────────────
+  standRow:           { flexDirection: 'row', alignItems: 'center' },
+  standRowHighlight:  { backgroundColor: '#252525', borderRadius: 8, paddingHorizontal: 4, marginHorizontal: -4 },
+  standRank:          { width: 24, color: '#fff', fontSize: 12, fontWeight: '600', textAlign: 'center' },
+  standTeam:          { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  standStat:          { width: 40, color: '#888', fontSize: 11, textAlign: 'center' },
+
+  // ── roster tab ───────────────────────────────────────────────────────────────
   rosterRow:      { flexDirection: 'row', alignItems: 'center', paddingVertical: 8 },
   rosterCell:     { width: 44, color: '#888', fontSize: 11, textAlign: 'center' },
 
+  // ── matches tab ──────────────────────────────────────────────────────────────
   chip:           { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20, backgroundColor: '#242424' },
   chipActive:     { backgroundColor: '#fff' },
   chipText:       { color: '#777', fontSize: 12, fontWeight: '600' },
@@ -422,4 +653,7 @@ const s = StyleSheet.create({
   matchOpp:       { flex: 1, color: '#fff', fontSize: 13, fontWeight: '600' },
   matchScore:     { fontSize: 13, fontWeight: '700' },
   matchTime:      { color: '#888', fontSize: 12 },
+
+  winner:         { color: '#4caf50' },
+  loser:          { color: '#e05a5a' },
 });

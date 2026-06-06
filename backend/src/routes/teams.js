@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getAllTeams, getTeamRoster, getTeamSchedule } from '../services/sportsData.js';
+import { getAllTeams, getTeamRoster, getTeamSchedule } from '../services/nbaApiService.js';
 
 const router = Router();
 

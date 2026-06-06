@@ -112,8 +112,8 @@ const DIVISION_ORDER = ['Atlantic','Central','Southeast','Northwest','Pacific','
 function OverviewTab({ standings }: { standings: Standing[] }) {
   const [view, setView] = useState<StandingsView>('Conference');
   const sorted = [...standings].sort((a, b) => b.Percentage - a.Percentage);
-  const east   = sorted.filter(t => t.Conference === 'Eastern');
-  const west   = sorted.filter(t => t.Conference === 'Western');
+  const east   = sorted.filter(t => t.Conference === 'East' || t.Conference === 'Eastern');
+  const west   = sorted.filter(t => t.Conference === 'West' || t.Conference === 'Western');
 
   const byDiv: Record<string, Standing[]> = {};
   standings.forEach(t => {

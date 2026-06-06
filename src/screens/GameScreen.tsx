@@ -152,7 +152,7 @@ function PlayerModal({ player, nbaIdMap, onClose }: {
 }) {
   const [imgFailed, setImgFailed] = useState(false);
   const nbaid = nbaIdMap[player.PlayerID];
-  const photoUri = nbaid ? `https://cdn.nba.com/headshots/nba/latest/1040x760/${nbaid}.png` : null;
+  const photoUri = player.PhotoUrl ?? (nbaid ? `https://cdn.nba.com/headshots/nba/latest/1040x760/${nbaid}.png` : null);
   const rating = calculateRating(player);
   const color  = teamColors[player.Team] ?? '#555';
 
@@ -258,7 +258,7 @@ function CourtPlayer({
   const top    = (y / 100) * courtH;
   const rating = calculateRating(player);
   const nbaid  = nbaIdMap[player.PlayerID];
-  const photoUri = nbaid ? `https://cdn.nba.com/headshots/nba/latest/1040x760/${nbaid}.png` : null;
+  const photoUri = player.PhotoUrl ?? (nbaid ? `https://cdn.nba.com/headshots/nba/latest/1040x760/${nbaid}.png` : null);
 
   return (
     <TouchableOpacity
@@ -288,7 +288,7 @@ function BenchRow({ player, nbaIdMap, onPress }: { player: any; nbaIdMap: Record
   const rating  = calculateRating(player);
   const color   = teamColors[player.Team] ?? '#555';
   const nbaid   = nbaIdMap[player.PlayerID];
-  const photoUri = nbaid ? `https://cdn.nba.com/headshots/nba/latest/1040x760/${nbaid}.png` : null;
+  const photoUri = player.PhotoUrl ?? (nbaid ? `https://cdn.nba.com/headshots/nba/latest/1040x760/${nbaid}.png` : null);
 
   return (
     <TouchableOpacity style={lineup.playerRow} onPress={() => onPress(player)} activeOpacity={0.7}>
@@ -989,8 +989,8 @@ function TableTab({ highlightTeams, isPlayoffs, season }: { highlightTeams: stri
   if (loading) return <ActivityIndicator color="#fff" style={{ marginTop: 40 }} />;
 
   const sorted = [...standings].sort((a, b) => b.Percentage - a.Percentage);
-  const east   = sorted.filter(t => t.Conference === 'Eastern').map((t, i) => ({ ...t, confRank: i + 1 }));
-  const west   = sorted.filter(t => t.Conference === 'Western').map((t, i) => ({ ...t, confRank: i + 1 }));
+  const east   = sorted.filter(t => t.Conference === 'East' || t.Conference === 'Eastern').map((t, i) => ({ ...t, confRank: i + 1 }));
+  const west   = sorted.filter(t => t.Conference === 'West' || t.Conference === 'Western').map((t, i) => ({ ...t, confRank: i + 1 }));
 
   // Division grouping
   const divisionOrder = ['Atlantic','Central','Southeast','Northwest','Pacific','Southwest'];
@@ -1203,7 +1203,9 @@ export default function GameScreen({ route, navigation }: Props) {
               <Text style={s.seriesText}>
                 {game.AwayTeam} {boxscore.PlayoffInfo.winsAway} – {boxscore.PlayoffInfo.winsHome} {game.HomeTeam}
               </Text>
-              <Text style={s.seriesSubtext}>{boxscore.PlayoffInfo.seriesLabel}</Text>
+              <Text style={s.seriesSubtext}>
+                {isFinal ? boxscore.PlayoffInfo.postSeriesLabel : boxscore.PlayoffInfo.seriesLabel}
+              </Text>
             </View>
           )}
 
