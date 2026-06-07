@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getStandings } from '../services/sportsData.js';
+import { getStandings } from '../services/nbaApiService.js';
 
 const router = Router();
 

@@ -6,6 +6,7 @@ import gamesRouter from './routes/games.js';
 import standingsRouter from './routes/standings.js';
 import teamsRouter from './routes/teams.js';
 import playersRouter from './routes/players.js';
+import { getStandings, getSchedule } from './services/nbaApiService.js';
 
 const app = express();
 const PORT = process.env.PORT ?? 5000;
@@ -22,4 +23,9 @@ app.get('/api/health', (_, res) => res.json({ status: 'ok' }));
 
 app.listen(PORT, () => {
   console.log(`BallHub backend running on http://localhost:${PORT}`);
+  // Pre-warm the most-used caches so first user requests are instant
+  Promise.allSettled([
+    getStandings(2025),
+    getSchedule(2025),
+  ]).then(() => console.log('Cache warmed: standings + schedule'));
 });

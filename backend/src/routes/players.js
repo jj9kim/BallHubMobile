@@ -5,7 +5,8 @@ import {
   getPlayerSeasonStats,
   getPlayerGameLogs,
   getAllPlayerSeasonStats,
-} from '../services/sportsData.js';
+  getNbaIdMap,
+} from '../services/nbaApiService.js';
 
 const router = Router();
 
@@ -19,16 +20,10 @@ router.get('/', async (req, res) => {
   }
 });
 
-// GET /api/players/nba-id-map — maps SportsData PlayerID → NbaDotComPlayerID
+// GET /api/players/nba-id-map — maps SportsBlaze PlayerID → NbaDotComPlayerID
 router.get('/nba-id-map', async (req, res) => {
   try {
-    const players = await getAllPlayers();
-    const map = {};
-    players.forEach(p => {
-      if (p.PlayerID && p.NbaDotComPlayerID) {
-        map[p.PlayerID] = p.NbaDotComPlayerID;
-      }
-    });
+    const map = await getNbaIdMap();
     res.json({ success: true, map });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });

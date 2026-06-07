@@ -374,9 +374,31 @@ function fmtHeight(inches: number): string {
   return `${Math.floor(inches / 12)}'${inches % 12}"`;
 }
 
+const MONTHS: Record<string, number> = {
+  JAN:0, FEB:1, MAR:2, APR:3, MAY:4, JUN:5,
+  JUL:6, AUG:7, SEP:8, OCT:9, NOV:10, DEC:11,
+};
+
 function calcAge(birthDate: string): string {
   if (!birthDate) return '—';
-  const age = Math.floor((Date.now() - new Date(birthDate).getTime()) / (365.25 * 24 * 3600 * 1000));
+  // Parse 'APR 09, 1996' — Hermes can't handle non-ISO strings in Date.parse
+  const m = birthDate.match(/^([A-Z]{3})\s+(\d{1,2}),?\s+(\d{4})$/);
+  let birth: Date;
+  if (m) {
+    const month = MONTHS[m[1]];
+    if (month === undefined) return '—';
+    birth = new Date(parseInt(m[3]), month, parseInt(m[2]));
+  } else {
+    // ISO format fallback e.g. '1996-04-09'
+    birth = new Date(birthDate);
+  }
+  if (isNaN(birth.getTime())) return '—';
+  const today = new Date();
+  let age = today.getFullYear() - birth.getFullYear();
+  const notYetHadBirthday =
+    today.getMonth() < birth.getMonth() ||
+    (today.getMonth() === birth.getMonth() && today.getDate() < birth.getDate());
+  if (notYetHadBirthday) age--;
   return String(age);
 }
 

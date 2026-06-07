@@ -21,12 +21,12 @@ function fileKey(path) {
   return path.replace(/[^a-zA-Z0-9]/g, '_') + '.json';
 }
 
-function readDiskCache(path) {
+function readDiskCache(path, { allowStale = false } = {}) {
   const file = join(CACHE_DIR, fileKey(path));
   if (!existsSync(file)) return undefined;
   try {
     const { data, expires } = JSON.parse(readFileSync(file, 'utf8'));
-    if (Date.now() < expires) return data;
+    if (Date.now() < expires || allowStale) return data;
   } catch {}
   return undefined;
 }
@@ -45,18 +45,30 @@ async function apiFetch(path, ttl = 300) {
   const memHit = memCache.get(path);
   if (memHit !== undefined) return memHit;
 
-  // 2. Disk cache (survives server restarts)
+  // 2. Disk cache — fresh
   const diskHit = readDiskCache(path);
   if (diskHit !== undefined) {
     memCache.set(path, diskHit, ttl);
     return diskHit;
   }
 
-  // 3. Real API call
-  const { data } = await client.get(path);
-  memCache.set(path, data, ttl);
-  writeDiskCache(path, data, ttl);
-  return data;
+  // 3. Real API call — fall back to stale disk cache on quota/network errors
+  try {
+    const { data } = await client.get(path);
+    memCache.set(path, data, ttl);
+    writeDiskCache(path, data, ttl);
+    return data;
+  } catch (err) {
+    const status = err?.response?.status;
+    if (status === 403 || status === 429 || status >= 500) {
+      const stale = readDiskCache(path, { allowStale: true });
+      if (stale !== undefined) {
+        memCache.set(path, stale, 60); // short mem-cache so we retry the API soon
+        return stale;
+      }
+    }
+    throw err;
+  }
 }
 
 // Convert JS Date or YYYY-MM-DD string to SportsData date format (YYYY-MMM-DD)

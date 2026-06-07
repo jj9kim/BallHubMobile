@@ -9,12 +9,14 @@ import ScoresScreen from '../screens/ScoresScreen';
 import GameScreen from '../screens/GameScreen';
 import TeamsScreen from '../screens/TeamsScreen';
 import TeamScreen from '../screens/TeamScreen';
+import PlayerScreen from '../screens/PlayerScreen';
 import PlayersScreen from '../screens/PlayersScreen';
 
 export type RootStackParamList = {
   MainTabs: undefined;
   Game: { gameId: number; gameDate: string };
   TeamProfile: { teamKey: string; teamCity: string; teamName: string };
+  PlayerProfile: { playerId: number };
 };
 
 export type TabParamList = {
@@ -84,6 +86,18 @@ export default function Navigation() {
             headerTintColor: '#fff',
             headerTitle: '',
             headerBackTitle: 'Teams',
+            headerShadowVisible: false,
+          }}
+        />
+        <Stack.Screen
+          name="PlayerProfile"
+          component={PlayerScreen}
+          options={{
+            headerShown: true,
+            headerStyle: { backgroundColor: '#141414' },
+            headerTintColor: '#fff',
+            headerTitle: '',
+            headerBackTitle: 'Roster',
             headerShadowVisible: false,
           }}
         />
