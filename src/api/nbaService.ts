@@ -189,6 +189,9 @@ export const NBAService = {
   getPlayerGameLogs: (id: number, season = 2025) =>
     apiFetch<{ logs: PlayerGameStats[] }>(`/api/players/${id}/gamelogs/${season}`),
 
+  getPlayerCareerStats: (id: number) =>
+    apiFetch<{ seasons: any[] }>(`/api/players/${id}/career`),
+
   // Helpers
   formatDate: (dateStr: string): string => {
     const d = new Date(dateStr);

@@ -19,9 +19,31 @@ function fmtHeight(inches: number): string {
   return `${Math.floor(inches / 12)}'${inches % 12}"`;
 }
 
+const MONTHS_PS: Record<string, number> = {
+  JAN:0, FEB:1, MAR:2, APR:3, MAY:4, JUN:5,
+  JUL:6, AUG:7, SEP:8, OCT:9, NOV:10, DEC:11,
+};
 function calcAge(birthDate: string): string {
   if (!birthDate) return '—';
-  return String(Math.floor((Date.now() - new Date(birthDate).getTime()) / (365.25 * 24 * 3600 * 1000)));
+  let birth: Date;
+  // 'APR 09, 1996' format
+  const abbr = birthDate.match(/^([A-Z]{3})\s+(\d{1,2}),?\s+(\d{4})$/);
+  if (abbr) {
+    const month = MONTHS_PS[abbr[1]];
+    if (month === undefined) return '—';
+    birth = new Date(parseInt(abbr[3]), month, parseInt(abbr[2]));
+  } else {
+    // ISO 'YYYY-MM-DD' — parse manually to avoid Hermes timezone shift
+    const parts = birthDate.split('-').map(Number);
+    if (parts.length === 3) birth = new Date(parts[0], parts[1] - 1, parts[2]);
+    else return '—';
+  }
+  if (isNaN(birth.getTime())) return '—';
+  const today = new Date();
+  let age = today.getFullYear() - birth.getFullYear();
+  if (today.getMonth() < birth.getMonth() ||
+      (today.getMonth() === birth.getMonth() && today.getDate() < birth.getDate())) age--;
+  return String(age);
 }
 
 function fmtPct(val: number | null | undefined): string {
@@ -78,19 +100,122 @@ function StatRow({ label, value, accent }: { label: string; value: string; accen
 // ── Game log row ──────────────────────────────────────────────────────────────
 
 function GameLogRow({ log, isAlt }: { log: PlayerGameStats; isAlt: boolean }) {
-  const date   = log.Day ? new Date(log.Day).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—';
-  const won    = log.PlusMinus > 0;
-  const result = log.PlusMinus > 0 ? 'W' : 'L';
+  const parts = log.Day ? log.Day.split('-').map(Number) : null;
+  const date  = parts ? new Date(parts[0], parts[1]-1, parts[2]).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—';
+  const result = (log as any).WinLoss || (log.PlusMinus > 0 ? 'W' : 'L');
+  const won    = result === 'W';
 
   return (
     <View style={[s.logRow, isAlt && { backgroundColor: '#191919' }]}>
       <Text style={s.logDate}>{date}</Text>
-      <Text style={s.logMatchup}>{log.Opponent ?? '—'}</Text>
-      <Text style={[s.logResult, won ? s.winText : s.loseText]}>{result}</Text>
+      <Text style={s.logMatchup}>{log.HomeOrAway === 'HOME' ? 'vs' : '@'} {log.Opponent ?? '—'}</Text>
+      <Text style={[s.logResult, won ? s.winText : s.loseText]}>
+        {result}{(log as any).TeamScore != null ? ` ${(log as any).TeamScore}-${(log as any).OpponentScore}` : ''}
+      </Text>
       <Text style={s.logStat}>{log.Points ?? '—'}</Text>
       <Text style={s.logStat}>{log.Rebounds ?? '—'}</Text>
       <Text style={s.logStat}>{log.Assists ?? '—'}</Text>
       <Text style={s.logMin}>{log.Minutes != null ? fmtStat(log.Minutes, 0) : '—'}</Text>
+    </View>
+  );
+}
+
+// ── Career Stats Card ─────────────────────────────────────────────────────────
+
+function CareerStatCols({ row, dim }: { row: any; dim?: boolean }) {
+  const c = dim ? '#666' : '#ccc';
+  return (
+    <>
+      <Text style={[s.careerStat, { color: c }]}>{row.Games}</Text>
+      <Text style={[s.careerStat, { color: dim ? '#888' : '#fff', fontWeight: '700' }]}>{fmtStat(row.Points)}</Text>
+      <Text style={[s.careerStat, { color: c }]}>{fmtStat(row.Rebounds)}</Text>
+      <Text style={[s.careerStat, { color: c }]}>{fmtStat(row.Assists)}</Text>
+      <Text style={[s.careerStat, { color: c }]}>{fmtStat(row.Steals)}</Text>
+      <Text style={[s.careerStat, { color: c }]}>{fmtStat(row.BlockedShots)}</Text>
+      <Text style={[s.careerStat, { color: c }]}>{fmtStat(row.FieldGoalsPercentage, 1)}%</Text>
+      <Text style={[s.careerStat, { color: c }]}>{fmtStat(row.ThreePointersPercentage, 1)}%</Text>
+    </>
+  );
+}
+
+function CareerStatsCard({ career }: { career: any[] }) {
+  const [expanded, setExpanded] = useState<Set<number>>(new Set());
+
+  // Group rows by SeasonYear
+  const seasons: { year: number; label: string; tot: any | null; teams: any[] }[] = [];
+  const yearMap = new Map<number, { tot: any | null; teams: any[] }>();
+  for (const row of career) {
+    if (!yearMap.has(row.SeasonYear)) yearMap.set(row.SeasonYear, { tot: null, teams: [] });
+    const entry = yearMap.get(row.SeasonYear)!;
+    if (!row.Team) entry.tot = row;
+    else entry.teams.push(row);
+  }
+  // Sort most recent first
+  for (const [year, { tot, teams }] of [...yearMap.entries()].sort((a, b) => b[0] - a[0])) {
+    const label = tot?.Season ?? teams[0]?.Season ?? String(year);
+    seasons.push({ year, label, tot, teams });
+  }
+
+  const toggle = (year: number) => {
+    setExpanded(prev => {
+      const next = new Set(prev);
+      next.has(year) ? next.delete(year) : next.add(year);
+      return next;
+    });
+  };
+
+  return (
+    <View style={s.card}>
+      <Text style={s.sectionLabel}>Career Stats</Text>
+      {/* Header */}
+      <View style={[s.careerRow, { marginTop: 10, borderBottomWidth: 1, borderBottomColor: '#2a2a2a', paddingBottom: 6 }]}>
+        <Text style={[s.careerSeason, { color: '#555', width: 86 }]}>Season</Text>
+        {['GP','PTS','REB','AST','STL','BLK','FG%','3P%'].map(h => (
+          <Text key={h} style={[s.careerStat, { color: '#555' }]}>{h}</Text>
+        ))}
+      </View>
+
+      {seasons.map(({ year, label, tot, teams }, si) => {
+        const isMultiTeam = teams.length > 1 || (teams.length === 1 && tot);
+        const isOpen = expanded.has(year);
+        // The "main" row: TOT if traded, otherwise the single team row
+        const mainRow = tot ?? teams[0];
+        const mainTeam = tot ? null : teams[0]?.Team;
+
+        return (
+          <View key={year}>
+            {/* Main row */}
+            <TouchableOpacity
+              activeOpacity={isMultiTeam ? 0.6 : 1}
+              onPress={isMultiTeam ? () => toggle(year) : undefined}
+              style={[s.careerRow, si > 0 && { borderTopWidth: 1, borderTopColor: '#2a2a2a' }]}
+            >
+              <View style={s.careerSeasonCell}>
+                {mainTeam ? (
+                  <Image source={{ uri: teamLogoUri(mainTeam) }} style={{ width: 20, height: 20 }} resizeMode="contain" />
+                ) : isMultiTeam ? (
+                  /* multiple teams — show chevron placeholder */
+                  <Text style={s.careerChevron}>{isOpen ? '▾' : '▸'}</Text>
+                ) : null}
+                <Text style={s.careerSeason}>{label}</Text>
+              </View>
+              <CareerStatCols row={mainRow} />
+            </TouchableOpacity>
+
+            {/* Expanded team rows */}
+            {isOpen && teams.map((teamRow, ti) => (
+              <View key={`${year}-${teamRow.Team}-${ti}`}
+                style={[s.careerRow, { borderTopWidth: 1, borderTopColor: '#1e1e1e', paddingLeft: 6, backgroundColor: '#181818' }]}>
+                <View style={s.careerSeasonCell}>
+                  <Image source={{ uri: teamLogoUri(teamRow.Team) }} style={{ width: 20, height: 20 }} resizeMode="contain" />
+                  <Text style={[s.careerSeason, { color: '#777', fontSize: 10 }]}>{teamRow.Team}</Text>
+                </View>
+                <CareerStatCols row={teamRow} dim />
+              </View>
+            ))}
+          </View>
+        );
+      })}
     </View>
   );
 }
@@ -103,6 +228,7 @@ export default function PlayerScreen({ route }: Props) {
   const [player,   setPlayer]   = useState<Player | null>(null);
   const [stats,    setStats]    = useState<PlayerStats | null>(null);
   const [logs,     setLogs]     = useState<PlayerGameStats[]>([]);
+  const [career,   setCareer]   = useState<any[]>([]);
   const [nbaId,    setNbaId]    = useState<number | undefined>(undefined);
   const [loading,  setLoading]  = useState(true);
   const [activeTab, setActiveTab] = useState<Tab>('Stats');
@@ -113,8 +239,10 @@ export default function PlayerScreen({ route }: Props) {
       NBAService.getPlayerSeasonStats(playerId),
       NBAService.getPlayerGameLogs(playerId),
       NBAService.getNbaIdMap(),
-    ]).then(([pRes, sRes, lRes, mapRes]) => {
+      NBAService.getPlayerCareerStats(playerId),
+    ]).then(([pRes, sRes, lRes, mapRes, careerRes]) => {
       setPlayer(pRes.player);
+      setCareer(careerRes.seasons ?? []);
       setStats(sRes.stats ?? null);
       setLogs((lRes.logs ?? []).reverse());
       setNbaId(mapRes.map?.[playerId]);
@@ -215,6 +343,11 @@ export default function PlayerScreen({ route }: Props) {
             )}
           </View>
 
+          {/* Career Stats */}
+          {career.length > 0 && (
+            <CareerStatsCard career={career} />
+          )}
+
           {/* Bio */}
           <View style={s.card}>
             <Text style={s.sectionLabel}>Profile</Text>
@@ -222,6 +355,15 @@ export default function PlayerScreen({ route }: Props) {
               {player.BirthDate    && <><StatRow label="Age"        value={calcAge(player.BirthDate)} /><View style={s.divider} /></>}
               {player.BirthCountry && <><StatRow label="Country"    value={player.BirthCountry} /><View style={s.divider} /></>}
               {player.College      && <><StatRow label="College"    value={player.College} /><View style={s.divider} /></>}
+              {(player as any).DraftYear && (
+                <>
+                  <StatRow
+                    label="Draft"
+                    value={`${(player as any).DraftYear} · Round ${(player as any).DraftRound} · Pick ${(player as any).DraftPick}`}
+                  />
+                  <View style={s.divider} />
+                </>
+              )}
               {player.Experience != null && <><StatRow label="Experience" value={`${player.Experience} yr${player.Experience !== 1 ? 's' : ''}`} /><View style={s.divider} /></>}
               <StatRow label="Status" value={player.Status ?? '—'} accent={player.Status === 'Active'} />
             </View>
@@ -286,10 +428,16 @@ const s = StyleSheet.create({
   winText:        { color: '#4caf50' },
   loseText:       { color: '#e05a5a' },
 
+  careerRow:        { flexDirection: 'row', alignItems: 'center', paddingVertical: 8 },
+  careerSeasonCell: { width: 82, flexDirection: 'row', alignItems: 'center', gap: 5 },
+  careerSeason:     { color: '#aaa', fontSize: 11, fontWeight: '600' },
+  careerStat:       { flex: 1, color: '#ccc', fontSize: 10, textAlign: 'center' },
+  careerChevron:    { width: 20, color: '#555', fontSize: 10, textAlign: 'center' },
+
   logRow:         { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 10 },
   logDate:        { width: 52, color: '#888', fontSize: 11 },
   logMatchup:     { flex: 1, color: '#fff', fontSize: 12, fontWeight: '600' },
-  logResult:      { width: 24, fontSize: 11, fontWeight: '700', textAlign: 'center' },
+  logResult:      { width: 72, fontSize: 11, fontWeight: '700' },
   logStat:        { width: 34, color: '#fff', fontSize: 12, fontWeight: '600', textAlign: 'center' },
   logMin:         { width: 34, color: '#888', fontSize: 11, textAlign: 'center' },
 });

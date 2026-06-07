@@ -6,6 +6,7 @@ import {
   getPlayerGameLogs,
   getAllPlayerSeasonStats,
   getNbaIdMap,
+  getPlayerCareerStats,
 } from '../services/nbaApiService.js';
 
 const router = Router();
@@ -67,6 +68,16 @@ router.get('/:id/gamelogs/:season', async (req, res) => {
   try {
     const logs = await getPlayerGameLogs(req.params.season, req.params.id);
     res.json({ success: true, logs, count: logs.length });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// GET /api/players/:id/career  — career season-by-season averages
+router.get('/:id/career', async (req, res) => {
+  try {
+    const seasons = await getPlayerCareerStats(req.params.id);
+    res.json({ success: true, seasons, count: seasons.length });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
