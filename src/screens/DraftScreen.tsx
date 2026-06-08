@@ -37,32 +37,30 @@ function DraftPickRow({ pick, index }: { pick: any; index: number }) {
         )}
       </View>
 
-      {/* Right: name on top, logo + meta + stats on bottom */}
+      {/* Middle: name + meta */}
       <View style={s.infoCell}>
         <Text style={s.name} numberOfLines={1}>{pick.Name}</Text>
-        <View style={s.bottomRow}>
-          {/* Logo + position/college */}
-          <View style={s.metaGroup}>
-            {pick.Team
-              ? <Image source={{ uri: teamLogoUri(pick.Team) }} style={s.teamLogo} resizeMode="contain" />
-              : <View style={s.teamLogo} />}
-            <Text style={s.meta} numberOfLines={1}>
-              {` · ${pick.Position}${pick.College ? ` · ${pick.College}` : ''}`}
-            </Text>
-          </View>
-          {/* Stats — centered in remaining space */}
-          <View style={s.statsRow}>
-            {(['GP', 'PTS', 'REB', 'AST'] as const).map((lbl) => {
-              const val = lbl === 'GP' ? (st?.GP ?? '—') : fmt(st?.[lbl as keyof typeof st]);
-              return (
-                <View key={lbl} style={s.statCell}>
-                  <Text style={s.statVal}>{val}</Text>
-                  <Text style={s.statLbl}>{lbl}</Text>
-                </View>
-              );
-            })}
-          </View>
+        <View style={s.metaGroup}>
+          {pick.Team
+            ? <Image source={{ uri: teamLogoUri(pick.Team) }} style={s.teamLogo} resizeMode="contain" />
+            : <View style={s.teamLogo} />}
+          <Text style={s.meta} numberOfLines={1}>
+            {`  ·  ${pick.Position}${pick.College ? `  ·  ${pick.College}` : ''}`}
+          </Text>
         </View>
+      </View>
+
+      {/* Right: stats — vertically centered */}
+      <View style={s.statsRow}>
+        {(['GP', 'PTS', 'REB', 'AST'] as const).map((lbl) => {
+          const val = lbl === 'GP' ? (st?.GP ?? '—') : fmt(st?.[lbl as keyof typeof st]);
+          return (
+            <View key={lbl} style={s.statCell}>
+              <Text style={s.statVal}>{val}</Text>
+              <Text style={s.statLbl}>{lbl}</Text>
+            </View>
+          );
+        })}
       </View>
     </View>
   );
@@ -125,14 +123,13 @@ const s = StyleSheet.create({
   photoFallback:{ width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center', backgroundColor: '#2a2a2a' },
   photoInitials:{ color: '#555', fontSize: 11, fontWeight: '800' },
 
-  infoCell:     { flex: 1, marginLeft: 8 },
+  infoCell:     { flex: 1, marginLeft: 8, justifyContent: 'center' },
   name:         { color: '#fff', fontSize: 13, fontWeight: '700' },
-  bottomRow:    { flexDirection: 'row', alignItems: 'center', marginTop: 4 },
-  metaGroup:    { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 4 },
+  metaGroup:    { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3 },
   teamLogo:     { width: 20, height: 20 },
   meta:         { color: '#555', fontSize: 10, flexShrink: 1 },
 
-  statsRow:     { flex: 1, flexDirection: 'row', justifyContent: 'center', gap: 2 },
+  statsRow:     { flexDirection: 'row', alignItems: 'center' },
   statCell:     { width: 34, alignItems: 'center' },
   statVal:      { color: '#aaa', fontSize: 11, fontWeight: '600' },
   statLbl:      { color: '#555', fontSize: 9, fontWeight: '600' },
