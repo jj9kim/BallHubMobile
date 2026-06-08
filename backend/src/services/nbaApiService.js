@@ -1327,25 +1327,40 @@ export async function getDraftClass(year) {
 
   const coreClient = axios.create({ baseURL: 'https://sports.core.api.espn.com', timeout: 12000 });
 
-  // Step 1: get all athlete $refs
-  const { data: listData } = await coreClient.get(
-    `/v2/sports/basketball/leagues/nba/seasons/${espnSeason}/draft/athletes?limit=60&lang=en&region=us`
-  );
-  const athleteRefs = (listData.items ?? []).map(i => i['$ref']).filter(Boolean);
+  // Step 1: get all athlete $refs — paginate through all pages
+  const athleteRefs = [];
+  let page = 1;
+  while (true) {
+    const { data: listData } = await coreClient.get(
+      `/v2/sports/basketball/leagues/nba/seasons/${espnSeason}/draft/athletes?limit=60&page=${page}&lang=en&region=us`
+    );
+    const items = (listData.items ?? []).map(i => i['$ref']).filter(Boolean);
+    athleteRefs.push(...items);
+    if (page >= (listData.pageCount ?? 1)) break;
+    page++;
+  }
   if (!athleteRefs.length) return [];
 
-  // Step 2: fetch all athlete details + pick details in parallel
-  const athleteDetails = await Promise.all(
-    athleteRefs.map(ref => coreClient.get(ref).then(r => r.data).catch(() => null))
-  );
+  // Batched parallel fetch helper — avoids overwhelming connection pool
+  async function batchFetch(urls, batchSize = 20) {
+    const results = [];
+    for (let i = 0; i < urls.length; i += batchSize) {
+      const batch = urls.slice(i, i + batchSize);
+      const batchResults = await Promise.all(
+        batch.map(url => coreClient.get(url).then(r => r.data).catch(() => null))
+      );
+      results.push(...batchResults);
+    }
+    return results;
+  }
 
-  const validAthletes = athleteDetails.filter(Boolean);
+  // Step 2: fetch all athlete details in batches
+  const athleteDetails = await batchFetch(athleteRefs);
+  const validAthletes = athleteDetails.filter(a => a && a.pick?.['$ref']); // only actual draftees
 
   // Extract pick $refs to fetch team assignments
-  const pickRefs = validAthletes.map(a => a.pick?.['$ref']).filter(Boolean);
-  const pickDetails = await Promise.all(
-    pickRefs.map(ref => coreClient.get(ref).then(r => r.data).catch(() => null))
-  );
+  const pickRefs = validAthletes.map(a => a.pick['$ref']);
+  const pickDetails = await batchFetch(pickRefs);
 
   // Build pick map: athleteId → { overall, team }
   const pickByRef = {};
