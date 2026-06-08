@@ -37,24 +37,24 @@ function DraftPickRow({ pick, index }: { pick: any; index: number }) {
         )}
       </View>
 
-      {/* Right: name row + stats row */}
+      {/* Right: name on top, logo + meta + stats on bottom */}
       <View style={s.infoCell}>
-        {/* Top: name + team logo */}
-        <View style={s.nameRow}>
-          <Text style={s.name} numberOfLines={1}>{pick.Name}</Text>
-          {pick.Team
-            ? <Image source={{ uri: teamLogoUri(pick.Team) }} style={s.teamLogo} resizeMode="contain" />
-            : <View style={s.teamLogo} />}
-        </View>
-        {/* Bottom: pos/college + stats */}
+        <Text style={s.name} numberOfLines={1}>{pick.Name}</Text>
         <View style={s.bottomRow}>
-          <Text style={s.meta} numberOfLines={1}>
-            {pick.Position}{pick.College ? ` · ${pick.College}` : ''}
-          </Text>
+          {/* Logo + position/college */}
+          <View style={s.metaGroup}>
+            {pick.Team
+              ? <Image source={{ uri: teamLogoUri(pick.Team) }} style={s.teamLogo} resizeMode="contain" />
+              : <View style={s.teamLogo} />}
+            <Text style={s.meta} numberOfLines={1}>
+              {pick.Position}{pick.College ? ` · ${pick.College}` : ''}
+            </Text>
+          </View>
+          {/* Stats */}
           <View style={s.statsRow}>
-            {([['GP', st?.GP ?? '—', false], ['PTS', fmt(st?.PTS), true], ['REB', fmt(st?.REB), false], ['AST', fmt(st?.AST), false]] as [string, string|number, boolean][]).map(([lbl, val, highlight]) => (
+            {([['GP', st?.GP ?? '—'], ['PTS', fmt(st?.PTS)], ['REB', fmt(st?.REB)], ['AST', fmt(st?.AST)]] as [string, string|number][]).map(([lbl, val]) => (
               <View key={lbl} style={s.statCell}>
-                <Text style={[s.statVal, highlight && { color: '#fff' }]}>{val}</Text>
+                <Text style={s.statVal}>{val}</Text>
                 <Text style={s.statLbl}>{lbl}</Text>
               </View>
             ))}
@@ -123,11 +123,11 @@ const s = StyleSheet.create({
   photoInitials:{ color: '#555', fontSize: 11, fontWeight: '800' },
 
   infoCell:     { flex: 1, marginLeft: 8 },
-  nameRow:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  name:         { flex: 1, color: '#fff', fontSize: 13, fontWeight: '700' },
-  teamLogo:     { width: 24, height: 24, marginLeft: 6 },
-  bottomRow:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 3 },
-  meta:         { flex: 1, color: '#555', fontSize: 10 },
+  name:         { color: '#fff', fontSize: 13, fontWeight: '700' },
+  bottomRow:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 },
+  metaGroup:    { flexDirection: 'row', alignItems: 'center', gap: 5, flex: 1 },
+  teamLogo:     { width: 20, height: 20 },
+  meta:         { color: '#555', fontSize: 10, flexShrink: 1 },
 
   statsRow:     { flexDirection: 'row' },
   statCell:     { width: 32, alignItems: 'center' },
