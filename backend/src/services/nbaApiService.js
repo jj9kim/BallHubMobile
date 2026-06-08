@@ -1409,6 +1409,38 @@ export async function getDraftClass(year) {
     };
   }).filter(p => p.Overall).sort((a, b) => a.Overall - b.Overall);
 
+  // Resolve missing ESPN IDs via team roster (for newly-drafted players whose
+  // draft record has no athlete.$ref yet)
+  const missingIdx = picks.map((p, i) => (!p.EspnId && p.Team) ? i : -1).filter(i => i >= 0);
+  if (missingIdx.length > 0) {
+    // Build team → roster map (fetch each unique team once)
+    const teams = [...new Set(missingIdx.map(i => picks[i].Team))];
+    const rosterMap = {};
+    await Promise.all(teams.map(async team => {
+      const espnTeamId = ESPN_TEAM_IDS[team];
+      if (!espnTeamId) return;
+      try {
+        const { data } = await espnClient.get(`/apis/site/v2/sports/basketball/nba/teams/${espnTeamId}/roster`);
+        rosterMap[team] = data.athletes ?? [];
+      } catch {}
+    }));
+
+    // Normalize name for fuzzy matching (strip accents, lowercase, collapse spaces)
+    const normalize = str => str.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g,' ').trim();
+
+    missingIdx.forEach(i => {
+      const pick = picks[i];
+      const roster = rosterMap[pick.Team] ?? [];
+      const normPickName = normalize(pick.Name);
+      const match = roster.find(a => normalize(a.fullName ?? '') === normPickName || normalize(a.displayName ?? '') === normPickName);
+      if (match?.id) {
+        pick.EspnId = match.id;
+        // Update headshot too
+        pick.PhotoUrl = `https://a.espncdn.com/i/headshots/nba/players/full/${match.id}.png`;
+      }
+    });
+  }
+
   // Batch-fetch most recent season averages for each pick
   const statsClient = axios.create({ baseURL: 'https://site.web.api.espn.com', timeout: 10000 });
   const statsResults = await batchFetch(
