@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getAllTeams, getTeamRoster, getTeamSchedule } from '../services/nbaApiService.js';
+import { getAllTeams, getTeamRoster, getTeamSchedule, getDraftClass } from '../services/nbaApiService.js';
 
 const router = Router();
 
@@ -40,6 +40,16 @@ router.get('/:team/schedule/:season', async (req, res) => {
   try {
     const games = await getTeamSchedule(req.params.season, req.params.team.toUpperCase());
     res.json({ success: true, games, count: games.length });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// GET /api/teams/draft/:year  e.g. /api/teams/draft/2024
+router.get('/draft/:year', async (req, res) => {
+  try {
+    const picks = await getDraftClass(req.params.year);
+    res.json({ success: true, picks, count: picks.length });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }

@@ -1312,6 +1312,83 @@ export async function getPlayerCareerStats(playerId) {
 }
 
 // ── NBA ID map ────────────────────────────────────────────────────────────────
+// ── Draft history ─────────────────────────────────────────────────────────────
+
+// Reverse ESPN team ID → app abbreviation
+const ESPN_ID_TO_APP = Object.fromEntries(Object.entries(ESPN_TEAM_IDS).map(([k, v]) => [v, k]));
+
+export async function getDraftClass(year) {
+  year = parseInt(year);
+  const espnSeason = year; // ESPN uses same year as the draft (2024 = 2024 draft)
+  const cacheKey = `draft_class_${year}`;
+
+  const cached = readDisk(cacheKey);
+  if (cached !== undefined) return cached;
+
+  const coreClient = axios.create({ baseURL: 'https://sports.core.api.espn.com', timeout: 12000 });
+
+  // Step 1: get all athlete $refs
+  const { data: listData } = await coreClient.get(
+    `/v2/sports/basketball/leagues/nba/seasons/${espnSeason}/draft/athletes?limit=60&lang=en&region=us`
+  );
+  const athleteRefs = (listData.items ?? []).map(i => i['$ref']).filter(Boolean);
+  if (!athleteRefs.length) return [];
+
+  // Step 2: fetch all athlete details + pick details in parallel
+  const athleteDetails = await Promise.all(
+    athleteRefs.map(ref => coreClient.get(ref).then(r => r.data).catch(() => null))
+  );
+
+  const validAthletes = athleteDetails.filter(Boolean);
+
+  // Extract pick $refs to fetch team assignments
+  const pickRefs = validAthletes.map(a => a.pick?.['$ref']).filter(Boolean);
+  const pickDetails = await Promise.all(
+    pickRefs.map(ref => coreClient.get(ref).then(r => r.data).catch(() => null))
+  );
+
+  // Build pick map: athleteId → { overall, team }
+  const pickByRef = {};
+  validAthletes.forEach((a, i) => {
+    const pickRef = a.pick?.['$ref'];
+    if (pickRef && pickDetails[i]) {
+      pickByRef[pickRef] = pickDetails[i];
+    }
+  });
+
+  const picks = validAthletes.map(a => {
+    const pickRef  = a.pick?.['$ref'] ?? '';
+    const pickData = pickByRef[pickRef] ?? {};
+    const m        = pickRef.match(/rounds\/(\d+)\/picks\/(\d+)/);
+    const round    = m ? parseInt(m[1]) : null;
+    const teamRef  = pickData.team?.['$ref'] ?? '';
+    const teamEspnId = teamRef.match(/\/teams\/(\d+)/)?.[1];
+    const teamAbbr = teamEspnId ? (ESPN_ID_TO_APP[parseInt(teamEspnId)] ?? null) : null;
+
+    // Draft athlete ID from $ref (for headshot)
+    const draftId = a.id ?? '';
+    const headshotUrl = a.headshot?.href ||
+      `https://a.espncdn.com/i/headshots/nbadraft/players/full/${draftId}.png`;
+
+    return {
+      Overall:   pickData.overall ?? null,
+      Round:     round,
+      Pick:      pickData.pick ?? null,
+      Name:      a.fullName ?? a.displayName ?? '',
+      Position:  a.position?.abbreviation ?? '',
+      Team:      teamAbbr,
+      College:   a.leagueAffiliation ?? '',
+      PhotoUrl:  headshotUrl,
+      DraftId:   draftId,
+    };
+  }).filter(p => p.Overall).sort((a, b) => a.Overall - b.Overall);
+
+  // Cache for a long time — draft data never changes
+  writeDisk(cacheKey, picks, 86400 * 365);
+  return picks;
+}
+
+// ── NBA ID map ────────────────────────────────────────────────────────────────
 // NBA player IDs ARE NBA.com IDs — return identity map so headshots work natively
 
 export async function getNbaIdMap() {

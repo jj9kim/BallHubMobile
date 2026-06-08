@@ -192,6 +192,9 @@ export const NBAService = {
   getPlayerCareerStats: (id: number) =>
     apiFetch<{ seasons: any[] }>(`/api/players/${id}/career`),
 
+  getDraftClass: (year: number) =>
+    apiFetch<{ picks: any[] }>(`/api/teams/draft/${year}`),
+
   // Helpers
   formatDate: (dateStr: string): string => {
     const d = new Date(dateStr);
