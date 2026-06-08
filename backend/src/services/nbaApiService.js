@@ -1424,21 +1424,27 @@ export async function getDraftClass(year) {
     const statsData = statsResults[i];
     if (!statsData || statsData.code) { pick.Stats = null; return; }
     const avgCat = (statsData.categories ?? []).find(c => (c.displayName ?? '').includes('Regular Season Averages'));
-    if (!avgCat) { pick.Stats = null; return; }
+    if (!avgCat?.statistics?.length) { pick.Stats = null; return; }
     const labels = avgCat.labels ?? [];
-    // Use most recent season (last entry)
-    const latest = (avgCat.statistics ?? []).sort((a, b) => (b.season?.year ?? 0) - (a.season?.year ?? 0))[0];
-    if (!latest) { pick.Stats = null; return; }
-    const statsArr = latest.stats ?? [];
-    const get = (label) => {
-      const v = statsArr[labels.indexOf(label)];
-      return v != null ? parseFloat(v) || 0 : null;
-    };
+    const idxOf  = (l) => labels.indexOf(l);
+
+    // Compute career weighted averages across all seasons
+    let totalGP = 0, sumPTS = 0, sumREB = 0, sumAST = 0;
+    for (const season of avgCat.statistics) {
+      const arr = season.stats ?? [];
+      const gp = parseFloat(arr[idxOf('GP')]) || 0;
+      if (!gp) continue;
+      totalGP += gp;
+      sumPTS  += (parseFloat(arr[idxOf('PTS')]) || 0) * gp;
+      sumREB  += (parseFloat(arr[idxOf('REB')]) || 0) * gp;
+      sumAST  += (parseFloat(arr[idxOf('AST')]) || 0) * gp;
+    }
+    if (!totalGP) { pick.Stats = null; return; }
     pick.Stats = {
-      GP:  get('GP'),
-      PTS: get('PTS'),
-      REB: get('REB'),
-      AST: get('AST'),
+      GP:  totalGP,
+      PTS: Math.round(sumPTS / totalGP * 10) / 10,
+      REB: Math.round(sumREB / totalGP * 10) / 10,
+      AST: Math.round(sumAST / totalGP * 10) / 10,
     };
     delete pick.EspnId; // clean up
   });
