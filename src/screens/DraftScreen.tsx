@@ -12,7 +12,7 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Draft'>;
 
 function fmt(val: number | null | undefined): string {
   if (val == null) return '—';
-  return Number.isInteger(val) ? String(val) : val.toFixed(1);
+  return val % 1 === 0 ? String(val) : val.toFixed(1);
 }
 
 function DraftPickRow({ pick, index }: { pick: any; index: number }) {
