@@ -151,8 +151,8 @@ export const NBAService = {
   getGameById: (id: number) =>
     apiFetch<{ game: Game }>(`/api/games/${id}`),
 
-  getBoxScore: (id: number) =>
-    apiFetch<{ boxscore: BoxScore }>(`/api/games/${id}/boxscore`),
+  getBoxScore: (id: number, date?: string) =>
+    apiFetch<{ boxscore: BoxScore }>(`/api/games/${id}/boxscore${date ? `?date=${date}` : ''}`),
 
   getPlayersByGame: (id: number) =>
     apiFetch<{ players: PlayerGameStats[] }>(`/api/games/${id}/players`),
@@ -191,6 +191,9 @@ export const NBAService = {
 
   getPlayerCareerStats: (id: number) =>
     apiFetch<{ seasons: any[] }>(`/api/players/${id}/career`),
+
+  getPlayerPlayoffStats: (id: number, season = 2025) =>
+    apiFetch<{ stats: PlayerStats }>(`/api/players/${id}/playoff-stats/${season}`),
 
   getDraftClass: (year: number) =>
     apiFetch<{ picks: any[] }>(`/api/teams/draft/${year}`),

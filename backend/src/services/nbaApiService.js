@@ -107,6 +107,16 @@ async function nbFetch(path, params = {}, ttl = 300, cacheKey = null) {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 // Parse NBA resultSet → array of objects
+// Convert NBA.com date "Apr 12, 2026" or "OCT 24, 2024" → ISO "2026-04-12"
+const MONTH_MAP = { JAN:'01',FEB:'02',MAR:'03',APR:'04',MAY:'05',JUN:'06',JUL:'07',AUG:'08',SEP:'09',OCT:'10',NOV:'11',DEC:'12' };
+function parseNbaDate(str) {
+  if (!str) return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str; // already ISO
+  const m = str.match(/^([A-Za-z]{3})\s+(\d{1,2}),\s+(\d{4})$/);
+  if (!m) return str;
+  return `${m[3]}-${MONTH_MAP[m[1].toUpperCase()] ?? '01'}-${m[2].padStart(2,'0')}`;
+}
+
 function parseRS(resultSets, name) {
   const rs = resultSets.find(r => r.name === name);
   if (!rs) return [];
@@ -766,7 +776,14 @@ export async function getBoxScore(gameId) {
   // ESPN IDs are 9 digits (e.g. 401859963); NBA IDs start with 002/004 (10 digits)
   // If the ID doesn't look like an NBA game ID, use ESPN box score
   const idStr = String(gameId);
-  const looksLikeNba = idStr.length === 10 || idStr.startsWith('002') || idStr.startsWith('004') || idStr.startsWith('005');
+  // NBA regular season IDs: 10 digits starting with 002/005
+  // NBA playoff IDs: 10 digits starting with 004 (stripped to 8 digits starting with 4)
+  // ESPN IDs: 9 digits starting with 4
+  const looksLikeNba = /^\d+$/.test(idStr) && (
+    idStr.length === 10 ||
+    (idStr.length === 8 && idStr.startsWith('4')) || // playoff: 0042500151 → 42500151
+    (idStr.length <= 8)
+  ) && idStr.length !== 9;
   if (!looksLikeNba) {
     return getEspnBoxScore(gameId);
   }
@@ -872,14 +889,14 @@ export async function getBoxScore(gameId) {
     Game: {
       GameID:         parseInt(nbaId),
       Status:         awayScore != null ? 'Final' : 'Scheduled',
-      Day:            null,
+      Day:            gameSummary?.GAME_DATE_EST?.split('T')[0] ?? null,
       DateTime:       null,
       AwayTeam:       awayTeam,
       HomeTeam:       homeTeam,
       AwayTeamScore:  awayScore,
       HomeTeamScore:  homeScore,
       Season:         currentSeason(),
-      SeasonType:     nbaId.startsWith('004') ? 3 : 1,
+      SeasonType:     (nbaId.startsWith('004') || nbaId.startsWith('005')) ? 3 : 1,
       Quarter:        null, TimeRemainingMinutes: null, TimeRemainingSeconds: null,
       Channel: null, Attendance: null,
     },
@@ -1147,33 +1164,42 @@ export async function getPlayerGameLogs(season, playerId) {
 
 // Original NBA API game log fallback
 async function getNbaGameLogs(season, playerId) {
-  try {
-    const seasonStr = toSeasonStr(season);
-    const data = await nbFetch('/stats/playergamelog', {
-      PlayerID: playerId, Season: seasonStr, SeasonType: 'Regular Season',
-    }, 3600, `gamelogs_nba_${playerId}_${season}`);
-    return parseRS(data.resultSets, 'PlayerGameLog').map(r => ({
-      PlayerID: playerId, Season: season,
-      GameID: parseInt(r.Game_ID),
-      Opponent: r.MATCHUP?.split(' ').pop() ?? '',
-      HomeOrAway: r.MATCHUP?.includes('vs.') ? 'HOME' : 'AWAY',
-      Day: r.GAME_DATE ?? null, WinLoss: r.WL ?? '',
-      TeamScore: null, OpponentScore: null,
-      Started: 1, Games: 1,
-      Minutes: parseFloat(r.MIN) || 0,
-      Points: r.PTS ?? 0, Rebounds: r.REB ?? 0, Assists: r.AST ?? 0,
-      Steals: r.STL ?? 0, BlockedShots: r.BLK ?? 0, Turnovers: r.TOV ?? 0,
-      PersonalFouls: 0,
-      FieldGoalsMade: r.FGM ?? 0, FieldGoalsAttempted: r.FGA ?? 0,
-      FieldGoalsPercentage: r.FG_PCT ?? 0,
-      ThreePointersMade: r.FG3M ?? 0, ThreePointersAttempted: r.FG3A ?? 0,
-      ThreePointersPercentage: r.FG3_PCT ?? 0,
-      FreeThrowsMade: r.FTM ?? 0, FreeThrowsAttempted: r.FTA ?? 0,
-      FreeThrowsPercentage: r.FT_PCT ?? 0,
-      PlusMinus: r.PLUS_MINUS ?? 0, TrueShootingPercentage: 0,
-      PlayerEfficiencyRating: 0, DoubleDoubles: 0, TripleDoubles: 0,
-    }));
-  } catch { return []; }
+  const seasonStr = toSeasonStr(season);
+  const mapRow = (r, isPlayoff = false) => ({
+    PlayerID: playerId, Season: season,
+    GameID: parseInt(r.Game_ID) || 0,
+    Opponent: r.MATCHUP?.split(' ').pop() ?? '',
+    HomeOrAway: r.MATCHUP?.includes('vs.') ? 'HOME' : 'AWAY',
+    Day: parseNbaDate(r.GAME_DATE), WinLoss: r.WL ?? '',
+    TeamScore: null, OpponentScore: null,
+    IsPlayoff: isPlayoff,
+    Started: 1, Games: 1,
+    Minutes: parseFloat(r.MIN) || 0,
+    Points: r.PTS ?? 0, Rebounds: r.REB ?? 0, Assists: r.AST ?? 0,
+    Steals: r.STL ?? 0, BlockedShots: r.BLK ?? 0, Turnovers: r.TOV ?? 0,
+    PersonalFouls: 0,
+    FieldGoalsMade: r.FGM ?? 0, FieldGoalsAttempted: r.FGA ?? 0,
+    FieldGoalsPercentage: r.FG_PCT ?? 0,
+    ThreePointersMade: r.FG3M ?? 0, ThreePointersAttempted: r.FG3A ?? 0,
+    ThreePointersPercentage: r.FG3_PCT ?? 0,
+    FreeThrowsMade: r.FTM ?? 0, FreeThrowsAttempted: r.FTA ?? 0,
+    FreeThrowsPercentage: r.FT_PCT ?? 0,
+    PlusMinus: r.PLUS_MINUS ?? 0, TrueShootingPercentage: 0,
+    PlayerEfficiencyRating: 0, DoubleDoubles: 0, TripleDoubles: 0,
+  });
+
+  const [regularData, playoffData, playInData] = await Promise.allSettled([
+    nbFetch('/stats/playergamelog', { PlayerID: playerId, Season: seasonStr, SeasonType: 'Regular Season' }, 3600, `gamelogs_nba_${playerId}_${season}`),
+    nbFetch('/stats/playergamelog', { PlayerID: playerId, Season: seasonStr, SeasonType: 'Playoffs' }, 86400, `gamelogs_playoff_${playerId}_${season}`),
+    nbFetch('/stats/playergamelog', { PlayerID: playerId, Season: seasonStr, SeasonType: 'PlayIn' }, 86400, `gamelogs_playin_${playerId}_${season}`),
+  ]);
+
+  const regular  = regularData.status  === 'fulfilled' ? parseRS(regularData.value.resultSets,  'PlayerGameLog').map(r => mapRow(r, false)) : [];
+  const playoffs = playoffData.status  === 'fulfilled' ? parseRS(playoffData.value.resultSets,  'PlayerGameLog').map(r => mapRow(r, true))  : [];
+  const playIn   = playInData.status   === 'fulfilled' ? parseRS(playInData.value.resultSets,   'PlayerGameLog').map(r => mapRow(r, true))  : [];
+
+  // Merge and sort by date descending (most recent first)
+  return [...regular, ...playoffs, ...playIn].sort((a, b) => (b.Day ?? '').localeCompare(a.Day ?? ''));
 }
 
 // ── Player season stats ───────────────────────────────────────────────────────
@@ -1204,8 +1230,9 @@ export async function getPlayerSeasonStats(season, playerId) {
     } catch {}
   }
 
-  // Fallback: compute averages from game logs
-  const logs = await getPlayerGameLogs(season, playerId).catch(() => []);
+  // Fallback: compute averages from regular season game logs only
+  const allLogs = await getPlayerGameLogs(season, playerId).catch(() => []);
+  const logs = allLogs.filter(g => !g.IsPlayoff);
   if (!logs.length) return null;
 
   const avg = (key) => logs.reduce((s, g) => s + (g[key] ?? 0), 0) / logs.length;
@@ -1226,6 +1253,28 @@ export async function getPlayerSeasonStats(season, playerId) {
     ThreePointersPercentage: tpa > 0 ? tpm / tpa : 0,
     FreeThrowsPercentage:    fta > 0 ? ftm / fta : 0,
     TrueShootingPercentage:  0, PlayerEfficiencyRating: 0, UsageRatePercentage: 0,
+    PlusMinus: avg('PlusMinus'), DoubleDoubles: 0, TripleDoubles: 0,
+  };
+}
+
+export async function getPlayerPlayoffStats(season, playerId) {
+  const allLogs = await getPlayerGameLogs(season, playerId).catch(() => []);
+  const logs = allLogs.filter(g => g.IsPlayoff);
+  if (!logs.length) return null;
+  const avg = (key) => logs.reduce((s, g) => s + (g[key] ?? 0), 0) / logs.length;
+  const sum = (key) => logs.reduce((s, g) => s + (g[key] ?? 0), 0);
+  const fgm = sum('FieldGoalsMade'), fga = sum('FieldGoalsAttempted');
+  const tpm = sum('ThreePointersMade'), tpa = sum('ThreePointersAttempted');
+  const ftm = sum('FreeThrowsMade'), fta = sum('FreeThrowsAttempted');
+  return {
+    PlayerID: Number(playerId), Season: Number(season),
+    Games: logs.length, Minutes: avg('Minutes'),
+    Points: avg('Points'), Rebounds: avg('Rebounds'), Assists: avg('Assists'),
+    Steals: avg('Steals'), BlockedShots: avg('BlockedShots'), Turnovers: avg('Turnovers'),
+    FieldGoalsPercentage:    fga > 0 ? fgm / fga : 0,
+    ThreePointersPercentage: tpa > 0 ? tpm / tpa : 0,
+    FreeThrowsPercentage:    fta > 0 ? ftm / fta : 0,
+    TrueShootingPercentage: 0, PlayerEfficiencyRating: 0, UsageRatePercentage: 0,
     PlusMinus: avg('PlusMinus'), DoubleDoubles: 0, TripleDoubles: 0,
   };
 }

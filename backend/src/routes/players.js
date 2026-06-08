@@ -3,6 +3,7 @@ import {
   getAllPlayers,
   getPlayerById,
   getPlayerSeasonStats,
+  getPlayerPlayoffStats,
   getPlayerGameLogs,
   getAllPlayerSeasonStats,
   getNbaIdMap,
@@ -59,6 +60,17 @@ router.get('/:id/stats/:season', async (req, res) => {
   try {
     const stats = await getPlayerSeasonStats(req.params.season, req.params.id);
     if (!stats) return res.status(404).json({ success: false, error: 'Stats not found' });
+    res.json({ success: true, stats });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// GET /api/players/:id/playoff-stats/:season
+router.get('/:id/playoff-stats/:season', async (req, res) => {
+  try {
+    const stats = await getPlayerPlayoffStats(req.params.season, req.params.id);
+    if (!stats) return res.status(404).json({ success: false, error: 'No playoff stats found' });
     res.json({ success: true, stats });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });

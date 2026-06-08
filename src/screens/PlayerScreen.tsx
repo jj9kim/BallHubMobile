@@ -4,6 +4,8 @@ import {
   Image, ActivityIndicator, TouchableOpacity,
 } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation';
 import { NBAService, Player, PlayerStats, PlayerGameStats } from '../api/nbaService';
 import { teamColors, teamLogoUri, teamFullNames } from '../utils/teamMappings';
@@ -98,15 +100,24 @@ function StatRow({ label, value, accent }: { label: string; value: string; accen
 // ── Game log row ──────────────────────────────────────────────────────────────
 
 function GameLogRow({ log, isAlt }: { log: PlayerGameStats; isAlt: boolean }) {
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const parts = log.Day ? log.Day.split('-').map(Number) : null;
-  const date  = parts ? new Date(parts[0], parts[1]-1, parts[2]).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—';
+  const date  = parts ? new Date(parts[0], parts[1]-1, parts[2]).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
   const result = (log as any).WinLoss || (log.PlusMinus > 0 ? 'W' : 'L');
   const won    = result === 'W';
+  const canNav = !!log.GameID && !!log.Day;
 
   return (
-    <View style={[s.logRow, isAlt && { backgroundColor: '#191919' }]}>
+    <TouchableOpacity
+      style={[s.logRow, isAlt && { backgroundColor: '#191919' }]}
+      disabled={!canNav}
+      onPress={() => canNav && navigation.navigate('Game', { gameId: log.GameID, gameDate: log.Day! })}
+      activeOpacity={0.7}
+    >
       <Text style={s.logDate}>{date}</Text>
-      <Text style={s.logMatchup}>{log.HomeOrAway === 'HOME' ? 'vs' : '@'} {log.Opponent ?? '—'}</Text>
+      <Text style={s.logMatchup}>
+        {log.HomeOrAway === 'HOME' ? 'vs' : '@'} {log.Opponent ?? '—'}
+      </Text>
       <Text style={[s.logResult, won ? s.winText : s.loseText]}>
         {result}{(log as any).TeamScore != null ? ` ${(log as any).TeamScore}-${(log as any).OpponentScore}` : ''}
       </Text>
@@ -114,7 +125,7 @@ function GameLogRow({ log, isAlt }: { log: PlayerGameStats; isAlt: boolean }) {
       <Text style={s.logStat}>{log.Rebounds ?? '—'}</Text>
       <Text style={s.logStat}>{log.Assists ?? '—'}</Text>
       <Text style={s.logMin}>{log.Minutes != null ? fmtStat(log.Minutes, 0) : '—'}</Text>
-    </View>
+    </TouchableOpacity>
   );
 }
 
@@ -221,12 +232,14 @@ function CareerStatsCard({ career }: { career: any[] }) {
 export default function PlayerScreen({ route }: Props) {
   const { playerId, fallback } = route.params;
 
-  const [player,   setPlayer]   = useState<Player | null>(null);
-  const [stats,    setStats]    = useState<PlayerStats | null>(null);
-  const [logs,     setLogs]     = useState<PlayerGameStats[]>([]);
-  const [career,   setCareer]   = useState<any[]>([]);
-  const [loading,  setLoading]  = useState(true);
-  const [activeTab, setActiveTab] = useState<Tab>('Stats');
+  const [player,      setPlayer]      = useState<Player | null>(null);
+  const [stats,       setStats]       = useState<PlayerStats | null>(null);
+  const [playoffStats,setPlayoffStats]= useState<PlayerStats | null>(null);
+  const [logs,        setLogs]        = useState<PlayerGameStats[]>([]);
+  const [career,      setCareer]      = useState<any[]>([]);
+  const [loading,     setLoading]     = useState(true);
+  const [activeTab,   setActiveTab]   = useState<Tab>('Stats');
+  const [showPlayoffs,setShowPlayoffs]= useState(false);
 
   useEffect(() => {
     const safe = <T,>(p: Promise<T>): Promise<T | null> => p.catch(() => null);
@@ -234,14 +247,16 @@ export default function PlayerScreen({ route }: Props) {
       safe(NBAService.getPlayerById(playerId)),
       safe(NBAService.getPlayerSeasonStats(playerId)),
       safe(NBAService.getPlayerCareerStats(playerId)),
-    ]).then(([pRes, sRes, careerRes]) => {
+      safe(NBAService.getPlayerPlayoffStats(playerId)),
+    ]).then(([pRes, sRes, careerRes, poRes]) => {
       if (pRes?.player) setPlayer(pRes.player);
       setStats(sRes?.stats ?? null);
       setCareer(careerRes?.seasons ?? []);
+      setPlayoffStats(poRes?.stats ?? null);
     }).catch(() => {}).finally(() => setLoading(false));
 
     safe(NBAService.getPlayerGameLogs(playerId))
-      .then(lRes => setLogs((lRes?.logs ?? []).reverse()));
+      .then(lRes => setLogs(lRes?.logs ?? []));
   }, [playerId]);
 
   const color = player ? (teamColors[player.Team] ?? '#555') : '#555';
@@ -298,40 +313,52 @@ export default function PlayerScreen({ route }: Props) {
 
           {/* Per-game averages */}
           <View style={s.card}>
-            <Text style={s.sectionLabel}>Season Averages</Text>
-            {stats ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Text style={s.sectionLabel}>{showPlayoffs ? 'Playoff Averages' : 'Season Averages'}</Text>
+              {playoffStats && (
+                <TouchableOpacity
+                  onPress={() => setShowPlayoffs(p => !p)}
+                  style={[s.toggleBtn, showPlayoffs && s.toggleBtnActive]}
+                >
+                  <Text style={[s.toggleBtnText, showPlayoffs && s.toggleBtnTextActive]}>
+                    {showPlayoffs ? 'Regular Season' : 'Playoffs'}
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
+            {(showPlayoffs ? playoffStats : stats) ? (
               <View style={{ marginTop: 14 }}>
                 {/* Big 3 */}
                 <View style={{ flexDirection: 'row', marginBottom: 4 }}>
-                  {[
-                    { val: fmtStat(stats.Points),    label: 'PTS' },
-                    { val: fmtStat(stats.Rebounds),  label: 'REB' },
-                    { val: fmtStat(stats.Assists),   label: 'AST' },
-                  ].map(({ val, label }, i) => (
+                  {(() => { const st = showPlayoffs ? playoffStats! : stats!; return [
+                    { val: fmtStat(st.Points),   label: 'PTS' },
+                    { val: fmtStat(st.Rebounds),  label: 'REB' },
+                    { val: fmtStat(st.Assists),   label: 'AST' },
+                  ]; })().map(({ val, label }, i) => (
                     <View key={label} style={[s.bigStatBox, i > 0 && { borderLeftWidth: 1, borderLeftColor: '#2a2a2a' }]}>
                       <Text style={s.bigStatVal}>{val}</Text>
                       <Text style={s.bigStatLbl}>{label}</Text>
                     </View>
                   ))}
                 </View>
+                {(() => { const st = showPlayoffs ? playoffStats! : stats!; return (<>
                 <View style={s.divider} />
-                <StatRow label="Steals"          value={fmtStat(stats.Steals)} />
+                <StatRow label="Steals"          value={fmtStat(st.Steals)} />
                 <View style={s.divider} />
-                <StatRow label="Blocks"          value={fmtStat(stats.BlockedShots)} />
+                <StatRow label="Blocks"          value={fmtStat(st.BlockedShots)} />
                 <View style={s.divider} />
-                <StatRow label="Turnovers"       value={fmtStat(stats.Turnovers)} />
+                <StatRow label="Turnovers"       value={fmtStat(st.Turnovers)} />
                 <View style={s.divider} />
-                <StatRow label="Field Goal %"    value={fmtPct(stats.FieldGoalsPercentage)} />
+                <StatRow label="Field Goal %"    value={fmtPct(st.FieldGoalsPercentage)} />
                 <View style={s.divider} />
-                <StatRow label="3-Point %"       value={fmtPct(stats.ThreePointersPercentage)} />
+                <StatRow label="3-Point %"       value={fmtPct(st.ThreePointersPercentage)} />
                 <View style={s.divider} />
-                <StatRow label="Free Throw %"    value={fmtPct(stats.FreeThrowsPercentage)} />
+                <StatRow label="Free Throw %"    value={fmtPct(st.FreeThrowsPercentage)} />
                 <View style={s.divider} />
-                <StatRow label="True Shooting %" value={fmtPct(stats.TrueShootingPercentage)} />
+                <StatRow label="Games Played"    value={String(st.Games ?? '—')} />
                 <View style={s.divider} />
-                <StatRow label="Games Played"    value={String(stats.Games ?? '—')} />
-                <View style={s.divider} />
-                <StatRow label="Minutes"         value={fmtStat(stats.Minutes)} />
+                <StatRow label="Minutes"         value={fmtStat(st.Minutes)} />
+                </>); })()}
               </View>
             ) : (
               <Text style={[s.emptyText, { marginTop: 12 }]}>No stats available</Text>
@@ -419,6 +446,10 @@ const s = StyleSheet.create({
   statRowLabel:   { flex: 1, color: '#aaa', fontSize: 14, fontWeight: '500' },
   statRowValue:   { color: '#fff', fontSize: 14, fontWeight: '700' },
   accentText:     { color: '#4caf50' },
+  toggleBtn:      { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, backgroundColor: '#242424' },
+  toggleBtnActive:{ backgroundColor: '#fff' },
+  toggleBtnText:  { color: '#777', fontSize: 11, fontWeight: '600' },
+  toggleBtnTextActive: { color: '#000', fontWeight: '700' },
 
   winText:        { color: '#4caf50' },
   loseText:       { color: '#e05a5a' },
@@ -431,7 +462,7 @@ const s = StyleSheet.create({
   careerTotText:    { color: '#fff', fontSize: 9, fontWeight: '700' },
 
   logRow:         { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 10 },
-  logDate:        { width: 52, color: '#888', fontSize: 11 },
+  logDate:        { width: 90, color: '#888', fontSize: 11 },
   logMatchup:     { flex: 1, color: '#fff', fontSize: 12, fontWeight: '600' },
   logResult:      { width: 72, fontSize: 11, fontWeight: '700' },
   logStat:        { width: 34, color: '#fff', fontSize: 12, fontWeight: '600', textAlign: 'center' },

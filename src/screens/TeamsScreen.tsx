@@ -9,12 +9,18 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation';
 import { NBAService, Standing, Game } from '../api/nbaService';
 import { teamLogoUri, teamColors, teamFullNames } from '../utils/teamMappings';
+import { PlayoffBracket } from '../components/PlayoffBracket';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type Tab = 'Overview' | 'Matches' | 'Draft';
+// Show Playoffs tab mid-April through mid-June
+const now = new Date();
+const month = now.getMonth(); // 0=Jan
+const IS_PLAYOFF_SEASON = (month === 3 && now.getDate() >= 12) || month === 4 || month === 5;
+
+type Tab = 'Overview' | 'Matches' | 'Playoffs' | 'Draft';
 type StandingsView = 'All' | 'Conference' | 'Division';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -47,7 +53,9 @@ function todayYMD() { return toYMD(new Date()); }
 // ── Tab Bar ───────────────────────────────────────────────────────────────────
 
 function TabBar({ active, onChange }: { active: Tab; onChange: (t: Tab) => void }) {
-  const TABS: Tab[] = ['Overview', 'Matches', 'Draft'];
+  const TABS: Tab[] = IS_PLAYOFF_SEASON
+    ? ['Overview', 'Matches', 'Playoffs', 'Draft']
+    : ['Overview', 'Matches', 'Draft'];
   return (
     <View style={s.tabBar}>
       {TABS.map(t => (
@@ -110,7 +118,7 @@ function StandingsSection({ teams, title }: { teams: Standing[]; title?: string 
 const DIVISION_ORDER = ['Atlantic','Central','Southeast','Northwest','Pacific','Southwest'];
 
 function OverviewTab({ standings }: { standings: Standing[] }) {
-  const [view, setView] = useState<StandingsView>('Conference');
+  const [view, setView] = useState<StandingsView>('All');
   const sorted = [...standings].sort((a, b) => b.Percentage - a.Percentage);
   const east   = sorted.filter(t => t.Conference === 'East' || t.Conference === 'Eastern');
   const west   = sorted.filter(t => t.Conference === 'West' || t.Conference === 'Western');
@@ -295,9 +303,10 @@ export default function TeamsScreen() {
         <ActivityIndicator color="#fff" style={{ marginTop: 40 }} />
       ) : (
         <View style={{ flex: 1 }}>
-          {activeTab === 'Overview' && <OverviewTab standings={standings} />}
-          {activeTab === 'Matches'  && <MatchesTab  standings={standings} />}
-          {activeTab === 'Draft'    && <DraftTab />}
+          {activeTab === 'Overview'  && <OverviewTab standings={standings} />}
+          {activeTab === 'Matches'   && <MatchesTab  standings={standings} />}
+          {activeTab === 'Playoffs'  && <PlayoffBracket season={2025} />}
+          {activeTab === 'Draft'     && <DraftTab />}
         </View>
       )}
     </SafeAreaView>
