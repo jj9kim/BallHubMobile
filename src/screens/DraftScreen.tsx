@@ -78,7 +78,14 @@ export default function DraftScreen({ route }: Props) {
       .catch(() => setLoading(false));
   }, [year]);
 
-  const filtered = round === 0 ? picks : picks.filter(p => p.Round === round);
+  type SortKey = 'pick' | 'GP' | 'PTS' | 'REB' | 'AST';
+  const [sortBy, setSortBy] = useState<SortKey>('pick');
+
+  const sorted = (() => {
+    const base = round === 0 ? picks : picks.filter(p => p.Round === round);
+    if (sortBy === 'pick') return base;
+    return [...base].sort((a, b) => (b.Stats?.[sortBy] ?? -1) - (a.Stats?.[sortBy] ?? -1));
+  })();
 
   return (
     <SafeAreaView style={s.container}>
@@ -95,11 +102,24 @@ export default function DraftScreen({ route }: Props) {
         ))}
       </View>
 
+      {/* Sort bar */}
+      <View style={s.filterBar}>
+        {([['Pick #', 'pick'], ['GP', 'GP'], ['PTS', 'PTS'], ['REB', 'REB'], ['AST', 'AST']] as [string, SortKey][]).map(([label, key]) => (
+          <TouchableOpacity
+            key={key}
+            style={[s.filterChip, sortBy === key && s.filterChipActive]}
+            onPress={() => setSortBy(key)}
+          >
+            <Text style={[s.filterText, sortBy === key && s.filterTextActive]}>{label}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
       {loading ? (
         <ActivityIndicator color="#fff" style={{ flex: 1 }} />
       ) : (
         <FlatList
-          data={filtered}
+          data={sorted}
           keyExtractor={(_, i) => String(i)}
           renderItem={({ item, index }) => <DraftPickRow pick={item} index={index} />}
           contentContainerStyle={{ paddingBottom: 40 }}
