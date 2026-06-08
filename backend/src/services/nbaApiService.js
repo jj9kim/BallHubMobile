@@ -1460,9 +1460,19 @@ export async function getDraftClass(year) {
     const labels = avgCat.labels ?? [];
     const idxOf  = (l) => labels.indexOf(l);
 
-    // Compute career weighted averages across all seasons
-    let totalGP = 0, sumPTS = 0, sumREB = 0, sumAST = 0;
+    // Deduplicate by season year: for traded players ESPN returns one row per
+    // team PLUS a combined TOT row (teamId=undefined). Keep only the TOT row
+    // when multiple rows exist for the same year to avoid double-counting GP.
+    const byYear = new Map();
     for (const season of avgCat.statistics) {
+      const yr = season.season?.year ?? season.season?.displayName ?? 'unknown';
+      const isTot = season.teamId == null;
+      if (!byYear.has(yr) || isTot) byYear.set(yr, season);
+    }
+
+    // Compute career weighted averages across deduplicated seasons
+    let totalGP = 0, sumPTS = 0, sumREB = 0, sumAST = 0;
+    for (const season of byYear.values()) {
       const arr = season.stats ?? [];
       const gp = parseFloat(arr[idxOf('GP')]) || 0;
       if (!gp) continue;
