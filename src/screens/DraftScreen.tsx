@@ -12,7 +12,7 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Draft'>;
 
 function fmt(val: number | null | undefined): string {
   if (val == null) return '—';
-  return val % 1 === 0 ? String(val) : val.toFixed(1);
+  return val.toFixed(1);
 }
 
 function DraftPickRow({ pick, index }: { pick: any; index: number }) {
@@ -55,7 +55,7 @@ function DraftPickRow({ pick, index }: { pick: any; index: number }) {
       {/* Stats */}
       <View style={s.statsRow}>
         <View style={s.statCell}>
-          <Text style={s.statVal}>{fmt(st?.GP)}</Text>
+          <Text style={s.statVal}>{st?.GP ?? '—'}</Text>
           <Text style={s.statLbl}>GP</Text>
         </View>
         <View style={s.statCell}>
