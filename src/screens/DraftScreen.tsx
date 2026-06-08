@@ -10,9 +10,15 @@ import { teamLogoUri } from '../utils/teamMappings';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Draft'>;
 
+function fmt(val: number | null | undefined): string {
+  if (val == null) return '—';
+  return Number.isInteger(val) ? String(val) : val.toFixed(1);
+}
+
 function DraftPickRow({ pick, index }: { pick: any; index: number }) {
   const [imgFailed, setImgFailed] = useState(false);
   const isR2 = pick.Round === 2;
+  const st = pick.Stats;
 
   return (
     <View style={[s.row, index % 2 === 1 && { backgroundColor: '#191919' }]}>
@@ -33,12 +39,10 @@ function DraftPickRow({ pick, index }: { pick: any; index: number }) {
         )}
       </View>
 
-      {/* Name + details */}
-      <View style={{ flex: 1, marginLeft: 10 }}>
+      {/* Name + position */}
+      <View style={s.nameCell}>
         <Text style={s.name} numberOfLines={1}>{pick.Name}</Text>
-        <Text style={s.meta}>
-          {pick.Position}{pick.College ? ` · ${pick.College}` : ''}
-        </Text>
+        <Text style={s.meta}>{pick.Position}{pick.College ? ` · ${pick.College}` : ''}</Text>
       </View>
 
       {/* Team logo */}
@@ -48,11 +52,24 @@ function DraftPickRow({ pick, index }: { pick: any; index: number }) {
         <View style={s.teamLogo} />
       )}
 
-      {/* Round/pick badge */}
-      <View style={s.roundBadge}>
-        <Text style={[s.roundText, isR2 && { color: '#555' }]}>
-          R{pick.Round}P{pick.Pick}
-        </Text>
+      {/* Stats */}
+      <View style={s.statsRow}>
+        <View style={s.statCell}>
+          <Text style={s.statVal}>{fmt(st?.GP)}</Text>
+          <Text style={s.statLbl}>GP</Text>
+        </View>
+        <View style={s.statCell}>
+          <Text style={s.statVal}>{fmt(st?.PTS)}</Text>
+          <Text style={s.statLbl}>PTS</Text>
+        </View>
+        <View style={s.statCell}>
+          <Text style={s.statVal}>{fmt(st?.REB)}</Text>
+          <Text style={s.statLbl}>REB</Text>
+        </View>
+        <View style={s.statCell}>
+          <Text style={s.statVal}>{fmt(st?.AST)}</Text>
+          <Text style={s.statLbl}>AST</Text>
+        </View>
       </View>
     </View>
   );
@@ -120,8 +137,12 @@ const s = StyleSheet.create({
 
   teamLogo:     { width: 30, height: 30, marginHorizontal: 8 },
 
-  roundBadge:   { minWidth: 46, alignItems: 'flex-end' },
-  roundText:    { color: '#888', fontSize: 10, fontWeight: '700' },
+  nameCell:     { flex: 1, marginLeft: 10 },
+
+  statsRow:     { flexDirection: 'row', gap: 2 },
+  statCell:     { width: 36, alignItems: 'center' },
+  statVal:      { color: '#fff', fontSize: 11, fontWeight: '700' },
+  statLbl:      { color: '#555', fontSize: 9, fontWeight: '600', marginTop: 1 },
 
   filterBar:        { flexDirection: 'row', gap: 8, paddingHorizontal: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#1e1e1e' },
   filterChip:       { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, backgroundColor: '#242424' },

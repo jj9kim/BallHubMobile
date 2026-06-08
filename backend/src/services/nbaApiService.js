@@ -1342,12 +1342,16 @@ export async function getDraftClass(year) {
   if (!athleteRefs.length) return [];
 
   // Batched parallel fetch helper — avoids overwhelming connection pool
-  async function batchFetch(urls, batchSize = 20) {
+  async function batchFetch(urls, batchSize = 20, customClient = null) {
+    const client = customClient ?? coreClient;
     const results = [];
     for (let i = 0; i < urls.length; i += batchSize) {
       const batch = urls.slice(i, i + batchSize);
       const batchResults = await Promise.all(
-        batch.map(url => coreClient.get(url).then(r => r.data).catch(() => null))
+        batch.map(url => url === '__skip__'
+          ? Promise.resolve(null)
+          : client.get(url).then(r => r.data).catch(() => null)
+        )
       );
       results.push(...batchResults);
     }
@@ -1401,8 +1405,43 @@ export async function getDraftClass(year) {
       College:   a.leagueAffiliation ?? '',
       PhotoUrl:  headshotUrl,
       DraftId:   draftId,
+      EspnId:    espnId,   // keep for stats lookup
     };
   }).filter(p => p.Overall).sort((a, b) => a.Overall - b.Overall);
+
+  // Batch-fetch most recent season averages for each pick
+  const statsClient = axios.create({ baseURL: 'https://site.web.api.espn.com', timeout: 10000 });
+  const statsResults = await batchFetch(
+    picks.map(p => p.EspnId
+      ? `https://site.web.api.espn.com/apis/common/v3/sports/basketball/nba/athletes/${p.EspnId}/stats`
+      : '__skip__'
+    ),
+    15,
+    statsClient
+  );
+
+  picks.forEach((pick, i) => {
+    const statsData = statsResults[i];
+    if (!statsData || statsData.code) { pick.Stats = null; return; }
+    const avgCat = (statsData.categories ?? []).find(c => (c.displayName ?? '').includes('Regular Season Averages'));
+    if (!avgCat) { pick.Stats = null; return; }
+    const labels = avgCat.labels ?? [];
+    // Use most recent season (last entry)
+    const latest = (avgCat.statistics ?? []).sort((a, b) => (b.season?.year ?? 0) - (a.season?.year ?? 0))[0];
+    if (!latest) { pick.Stats = null; return; }
+    const statsArr = latest.stats ?? [];
+    const get = (label) => {
+      const v = statsArr[labels.indexOf(label)];
+      return v != null ? parseFloat(v) || 0 : null;
+    };
+    pick.Stats = {
+      GP:  get('GP'),
+      PTS: get('PTS'),
+      REB: get('REB'),
+      AST: get('AST'),
+    };
+    delete pick.EspnId; // clean up
+  });
 
   // Cache for a long time — draft data never changes
   writeDisk(cacheKey, picks, 86400 * 365);
