@@ -247,99 +247,84 @@ function MatchesTab({ standings }: { standings: Standing[] }) {
 
 // ── Draft Tab ─────────────────────────────────────────────────────────────────
 
-const DRAFT_YEARS = [2025, 2024, 2023, 2022, 2021, 2020];
+const CURRENT_YEAR = new Date().getFullYear();
+const DRAFT_YEARS = Array.from({ length: CURRENT_YEAR - 2000 }, (_, i) => CURRENT_YEAR - i);
 
 function DraftPickRow({ pick, index }: { pick: any; index: number }) {
   const [imgFailed, setImgFailed] = useState(false);
   const isR2 = pick.Round === 2;
   return (
-    <View style={[d.row, index % 2 === 1 && { backgroundColor: '#191919' }]}>
-      {/* Pick number */}
+    <View style={[d.row, index % 2 === 1 && { backgroundColor: '#181818' }]}>
       <View style={d.pickCell}>
         <Text style={[d.overall, isR2 && { color: '#555' }]}>{pick.Overall}</Text>
       </View>
-      {/* Player photo */}
       <View style={d.photoWrap}>
         {!imgFailed && pick.PhotoUrl ? (
           <Image source={{ uri: pick.PhotoUrl }} style={d.photo} resizeMode="cover"
             onError={() => setImgFailed(true)} />
         ) : (
-          <View style={[d.photoFallback]}>
+          <View style={d.photoFallback}>
             <Text style={d.photoInitials}>{pick.Name?.split(' ').pop()?.slice(0,2)}</Text>
           </View>
         )}
       </View>
-      {/* Name + details */}
       <View style={{ flex: 1, marginLeft: 10 }}>
         <Text style={d.name} numberOfLines={1}>{pick.Name}</Text>
         <Text style={d.meta}>{pick.Position}{pick.College ? ` · ${pick.College}` : ''}</Text>
       </View>
-      {/* Team logo */}
       {pick.Team ? (
         <Image source={{ uri: teamLogoUri(pick.Team) }} style={d.teamLogo} resizeMode="contain" />
-      ) : (
-        <View style={d.teamLogo} />
-      )}
-      {/* Round badge */}
-      <View style={[d.roundBadge, isR2 && d.roundBadgeR2]}>
+      ) : <View style={d.teamLogo} />}
+      <View style={d.roundBadge}>
         <Text style={[d.roundText, isR2 && { color: '#555' }]}>R{pick.Round}P{pick.Pick}</Text>
       </View>
     </View>
   );
 }
 
-function DraftTab() {
-  const currentYear = new Date().getFullYear();
-  const [year, setYear]   = useState(currentYear);
-  const [picks, setPicks] = useState<any[]>([]);
+function DraftYearAccordion({ year }: { year: number }) {
+  const [open, setOpen]       = useState(false);
+  const [picks, setPicks]     = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
-  const [round, setRound] = useState<1 | 2 | 0>(0); // 0 = all
+  const [loaded, setLoaded]   = useState(false);
 
-  useEffect(() => {
-    setLoading(true);
-    setPicks([]);
-    NBAService.getDraftClass(year)
-      .then(res => { setPicks(res.picks ?? []); setLoading(false); })
-      .catch(() => setLoading(false));
-  }, [year]);
-
-  const filtered = round === 0 ? picks : picks.filter(p => p.Round === round);
+  const toggle = () => {
+    if (!open && !loaded) {
+      setLoading(true);
+      NBAService.getDraftClass(year)
+        .then(res => { setPicks(res.picks ?? []); setLoaded(true); setLoading(false); })
+        .catch(() => setLoading(false));
+    }
+    setOpen(o => !o);
+  };
 
   return (
-    <View style={{ flex: 1 }}>
-      {/* Year selector */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false}
-        contentContainerStyle={d.yearBar}>
-        {DRAFT_YEARS.map(y => (
-          <TouchableOpacity key={y} style={[d.yearChip, year === y && d.yearChipActive]}
-            onPress={() => setYear(y)}>
-            <Text style={[d.yearText, year === y && d.yearTextActive]}>{y}</Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
+    <View style={d.accordion}>
+      <TouchableOpacity style={d.accordionHeader} onPress={toggle} activeOpacity={0.7}>
+        <Text style={d.accordionTitle}>{year} NBA Entry Draft</Text>
+        <Text style={d.accordionChevron}>{open ? '▾' : '▸'}</Text>
+      </TouchableOpacity>
 
-      {/* Round filter */}
-      <View style={d.roundBar}>
-        {([['All', 0], ['Round 1', 1], ['Round 2', 2]] as [string, 0|1|2][]).map(([label, val]) => (
-          <TouchableOpacity key={val} style={[d.roundChip, round === val && d.roundChipActive]}
-            onPress={() => setRound(val)}>
-            <Text style={[d.roundChipText, round === val && d.roundChipTextActive]}>{label}</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-
-      {loading ? (
-        <ActivityIndicator color="#fff" style={{ marginTop: 40 }} />
-      ) : (
-        <FlatList
-          data={filtered}
-          keyExtractor={(_, i) => String(i)}
-          renderItem={({ item, index }) => <DraftPickRow pick={item} index={index} />}
-          contentContainerStyle={{ paddingBottom: 40 }}
-          ListEmptyComponent={<Text style={[s.empty, { textAlign: 'center', marginTop: 40 }]}>No data</Text>}
-        />
+      {open && (
+        <View>
+          {loading ? (
+            <ActivityIndicator color="#888" style={{ marginVertical: 20 }} />
+          ) : (
+            picks.map((pick, i) => <DraftPickRow key={`${year}-${i}`} pick={pick} index={i} />)
+          )}
+        </View>
       )}
     </View>
+  );
+}
+
+function DraftTab() {
+  return (
+    <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
+      {DRAFT_YEARS.map(year => (
+        <DraftYearAccordion key={year} year={year} />
+      ))}
+    </ScrollView>
   );
 }
 
@@ -434,17 +419,11 @@ const s = StyleSheet.create({
 });
 
 const d = StyleSheet.create({
-  yearBar:        { flexDirection: 'row', gap: 8, paddingHorizontal: 12, paddingVertical: 10 },
-  yearChip:       { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, backgroundColor: '#242424' },
-  yearChipActive: { backgroundColor: '#fff' },
-  yearText:       { color: '#777', fontSize: 13, fontWeight: '600' },
-  yearTextActive: { color: '#000', fontWeight: '700' },
-
-  roundBar:           { flexDirection: 'row', gap: 8, paddingHorizontal: 12, paddingBottom: 8 },
-  roundChip:          { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, backgroundColor: '#1e1e1e' },
-  roundChipActive:    { backgroundColor: '#333' },
-  roundChipText:      { color: '#555', fontSize: 12, fontWeight: '600' },
-  roundChipTextActive:{ color: '#fff' },
+  accordion:       { borderBottomWidth: 1, borderBottomColor: '#1e1e1e' },
+  accordionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+                     paddingHorizontal: 16, paddingVertical: 16 },
+  accordionTitle:  { color: '#fff', fontSize: 15, fontWeight: '700' },
+  accordionChevron:{ color: '#555', fontSize: 16 },
 
   row:          { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 10 },
   pickCell:     { width: 32, alignItems: 'center' },
@@ -457,6 +436,5 @@ const d = StyleSheet.create({
   meta:         { color: '#555', fontSize: 11, marginTop: 2 },
   teamLogo:     { width: 28, height: 28, marginHorizontal: 8 },
   roundBadge:   { minWidth: 44, alignItems: 'center', paddingHorizontal: 4 },
-  roundBadgeR2: {},
   roundText:    { color: '#888', fontSize: 10, fontWeight: '700' },
 });

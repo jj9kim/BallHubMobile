@@ -1327,16 +1327,16 @@ export async function getDraftClass(year) {
 
   const coreClient = axios.create({ baseURL: 'https://sports.core.api.espn.com', timeout: 12000 });
 
-  // Step 1: get all athlete $refs — paginate through all pages
+  // Step 1: get all athlete $refs — paginate (cap at 5 pages; some years have anomalous counts)
   const athleteRefs = [];
   let page = 1;
-  while (true) {
+  while (page <= 5) {
     const { data: listData } = await coreClient.get(
       `/v2/sports/basketball/leagues/nba/seasons/${espnSeason}/draft/athletes?limit=60&page=${page}&lang=en&region=us`
     );
     const items = (listData.items ?? []).map(i => i['$ref']).filter(Boolean);
     athleteRefs.push(...items);
-    if (page >= (listData.pageCount ?? 1)) break;
+    if (page >= (listData.pageCount ?? 1) || items.length === 0) break;
     page++;
   }
   if (!athleteRefs.length) return [];
