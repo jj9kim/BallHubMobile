@@ -4,29 +4,45 @@ import {
   Image, ActivityIndicator, TouchableOpacity,
 } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation';
 import { NBAService } from '../api/nbaService';
 import { teamLogoUri } from '../utils/teamMappings';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Draft'>;
+type NavProp = NativeStackNavigationProp<RootStackParamList>;
+type SortKey = 'pick' | 'GP' | 'PTS' | 'REB' | 'AST';
 
 function fmt(val: number | null | undefined): string {
   if (val == null) return '—';
   return val.toFixed(1);
 }
 
-function DraftPickRow({ pick, index }: { pick: any; index: number }) {
+function DraftPickRow({
+  pick, index, sortBy, onSort,
+}: {
+  pick: any; index: number; sortBy: SortKey; onSort: (k: SortKey) => void;
+}) {
   const [imgFailed, setImgFailed] = useState(false);
+  const navigation = useNavigation<NavProp>();
   const isR2 = pick.Round === 2;
   const st = pick.Stats;
+  const canNav = !!pick.NbaId;
+
+  const goToPlayer = () => {
+    if (canNav) navigation.navigate('PlayerProfile', { playerId: pick.NbaId });
+  };
 
   return (
     <View style={[s.row, index % 2 === 1 && { backgroundColor: '#191919' }]}>
-      {/* Left: pick # + photo */}
+      {/* Pick # */}
       <View style={s.pickCell}>
         <Text style={[s.overall, isR2 && { color: '#555' }]}>{pick.Overall}</Text>
       </View>
-      <View style={s.photoWrap}>
+
+      {/* Photo — tappable */}
+      <TouchableOpacity style={s.photoWrap} onPress={goToPlayer} disabled={!canNav}>
         {!imgFailed && pick.PhotoUrl ? (
           <Image source={{ uri: pick.PhotoUrl }} style={s.photo} resizeMode="cover"
             onError={() => setImgFailed(true)} />
@@ -35,10 +51,10 @@ function DraftPickRow({ pick, index }: { pick: any; index: number }) {
             <Text style={s.photoInitials}>{pick.Name?.split(' ').pop()?.slice(0, 2)}</Text>
           </View>
         )}
-      </View>
+      </TouchableOpacity>
 
-      {/* Middle: name + meta */}
-      <View style={s.infoCell}>
+      {/* Name + meta — tappable */}
+      <TouchableOpacity style={s.infoCell} onPress={goToPlayer} disabled={!canNav}>
         <Text style={s.name} numberOfLines={1}>{pick.Name}</Text>
         <View style={s.metaGroup}>
           {pick.Team
@@ -48,17 +64,18 @@ function DraftPickRow({ pick, index }: { pick: any; index: number }) {
             {` ·  ${pick.Position}${pick.College ? `  ·  ${pick.College}` : ''}`}
           </Text>
         </View>
-      </View>
+      </TouchableOpacity>
 
-      {/* Right: stats — vertically centered */}
+      {/* Stats — tap to sort by that column */}
       <View style={s.statsRow}>
         {(['GP', 'PTS', 'REB', 'AST'] as const).map((lbl) => {
           const val = lbl === 'GP' ? (st?.GP ?? '—') : fmt(st?.[lbl as keyof typeof st]);
+          const active = sortBy === lbl;
           return (
-            <View key={lbl} style={s.statCell}>
-              <Text style={s.statVal}>{val}</Text>
-              <Text style={s.statLbl}>{lbl}</Text>
-            </View>
+            <TouchableOpacity key={lbl} style={s.statCell} onPress={() => onSort(lbl)}>
+              <Text style={[s.statVal, active && s.statValActive]}>{val}</Text>
+              <Text style={[s.statLbl, active && s.statLblActive]}>{lbl}</Text>
+            </TouchableOpacity>
           );
         })}
       </View>
@@ -68,9 +85,10 @@ function DraftPickRow({ pick, index }: { pick: any; index: number }) {
 
 export default function DraftScreen({ route }: Props) {
   const { year } = route.params;
-  const [picks, setPicks]     = useState<any[]>([]);
+  const [picks, setPicks]   = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [round, setRound]     = useState<0 | 1 | 2>(0);
+  const [round, setRound]   = useState<0 | 1 | 2>(0);
+  const [sortBy, setSortBy] = useState<SortKey>('pick');
 
   useEffect(() => {
     NBAService.getDraftClass(year)
@@ -78,8 +96,9 @@ export default function DraftScreen({ route }: Props) {
       .catch(() => setLoading(false));
   }, [year]);
 
-  type SortKey = 'pick' | 'GP' | 'PTS' | 'REB' | 'AST';
-  const [sortBy, setSortBy] = useState<SortKey>('pick');
+  const handleSort = (key: SortKey) => {
+    setSortBy(prev => prev === key ? 'pick' : key);
+  };
 
   const sorted = (() => {
     const base = round === 0 ? picks : picks.filter(p => p.Round === round);
@@ -89,7 +108,6 @@ export default function DraftScreen({ route }: Props) {
 
   return (
     <SafeAreaView style={s.container}>
-      {/* Round filter */}
       <View style={s.filterBar}>
         {([['All', 0], ['Round 1', 1], ['Round 2', 2]] as [string, 0|1|2][]).map(([label, val]) => (
           <TouchableOpacity
@@ -102,26 +120,15 @@ export default function DraftScreen({ route }: Props) {
         ))}
       </View>
 
-      {/* Sort bar */}
-      <View style={s.filterBar}>
-        {([['Pick #', 'pick'], ['GP', 'GP'], ['PTS', 'PTS'], ['REB', 'REB'], ['AST', 'AST']] as [string, SortKey][]).map(([label, key]) => (
-          <TouchableOpacity
-            key={key}
-            style={[s.filterChip, sortBy === key && s.filterChipActive]}
-            onPress={() => setSortBy(key)}
-          >
-            <Text style={[s.filterText, sortBy === key && s.filterTextActive]}>{label}</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-
       {loading ? (
         <ActivityIndicator color="#fff" style={{ flex: 1 }} />
       ) : (
         <FlatList
           data={sorted}
           keyExtractor={(_, i) => String(i)}
-          renderItem={({ item, index }) => <DraftPickRow pick={item} index={index} />}
+          renderItem={({ item, index }) => (
+            <DraftPickRow pick={item} index={index} sortBy={sortBy} onSort={handleSort} />
+          )}
           contentContainerStyle={{ paddingBottom: 40 }}
           ListEmptyComponent={<Text style={s.empty}>No draft data available</Text>}
         />
@@ -149,10 +156,12 @@ const s = StyleSheet.create({
   teamLogo:     { width: 20, height: 20 },
   meta:         { color: '#555', fontSize: 10, flexShrink: 1 },
 
-  statsRow:     { flexDirection: 'row', alignItems: 'center' },
-  statCell:     { width: 34, alignItems: 'center' },
-  statVal:      { color: '#aaa', fontSize: 11, fontWeight: '600' },
-  statLbl:      { color: '#555', fontSize: 9, fontWeight: '600' },
+  statsRow:        { flexDirection: 'row', alignItems: 'center' },
+  statCell:        { width: 34, alignItems: 'center' },
+  statVal:         { color: '#aaa', fontSize: 11, fontWeight: '600' },
+  statValActive:   { color: '#fff', fontWeight: '800' },
+  statLbl:         { color: '#555', fontSize: 9, fontWeight: '600' },
+  statLblActive:   { color: '#aaa' },
 
   filterBar:        { flexDirection: 'row', gap: 8, paddingHorizontal: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#1e1e1e' },
   filterChip:       { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, backgroundColor: '#242424' },

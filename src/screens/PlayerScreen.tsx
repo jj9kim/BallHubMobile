@@ -58,11 +58,9 @@ function fmtStat(val: number | null | undefined, decimals = 1): string {
 
 // ── Player photo ──────────────────────────────────────────────────────────────
 
-function PlayerPhoto({ player, nbaId, size = 90 }: { player: Player; nbaId?: number; size?: number }) {
+function PlayerPhoto({ player, size = 90 }: { player: Player; size?: number }) {
   const [failed, setFailed] = useState(false);
-  const uri = nbaId
-    ? `https://cdn.nba.com/headshots/nba/latest/1040x760/${nbaId}.png`
-    : player.PhotoUrl;
+  const uri = player.PhotoUrl;
   const color = teamColors[player.Team] ?? '#333';
 
   if (failed || !uri) {
@@ -132,8 +130,8 @@ function CareerStatCols({ row, dim }: { row: any; dim?: boolean }) {
       <Text style={[s.careerStat, { color: c }]}>{fmtStat(row.Assists)}</Text>
       <Text style={[s.careerStat, { color: c }]}>{fmtStat(row.Steals)}</Text>
       <Text style={[s.careerStat, { color: c }]}>{fmtStat(row.BlockedShots)}</Text>
-      <Text style={[s.careerStat, { color: c }]}>{fmtStat(row.FieldGoalsPercentage, 1)}%</Text>
-      <Text style={[s.careerStat, { color: c }]}>{fmtStat(row.ThreePointersPercentage, 1)}%</Text>
+      <Text style={[s.careerStat, { color: c }]}>{fmtStat((row.FieldGoalsPercentage ?? 0) * 100, 1)}%</Text>
+      <Text style={[s.careerStat, { color: c }]}>{fmtStat((row.ThreePointersPercentage ?? 0) * 100, 1)}%</Text>
     </>
   );
 }
@@ -141,19 +139,20 @@ function CareerStatCols({ row, dim }: { row: any; dim?: boolean }) {
 function CareerStatsCard({ career }: { career: any[] }) {
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
 
-  // Group rows by SeasonYear
-  const seasons: { year: number; label: string; tot: any | null; teams: any[] }[] = [];
+  // Group rows by SeasonYear — NBA.com returns individual team rows + a real TOT row for traded seasons
+  const seasons: { year: number; label: string; tot: any; teams: any[] }[] = [];
   const yearMap = new Map<number, { tot: any | null; teams: any[] }>();
   for (const row of career) {
     if (!yearMap.has(row.SeasonYear)) yearMap.set(row.SeasonYear, { tot: null, teams: [] });
     const entry = yearMap.get(row.SeasonYear)!;
-    if (!row.Team) entry.tot = row;
+    if (row.Team === 'TOT') entry.tot = row;
     else entry.teams.push(row);
   }
-  // Sort most recent first
   for (const [year, { tot, teams }] of [...yearMap.entries()].sort((a, b) => b[0] - a[0])) {
-    const label = tot?.Season ?? teams[0]?.Season ?? String(year);
-    seasons.push({ year, label, tot, teams });
+    const label = (tot ?? teams[0])?.Season ?? String(year);
+    // Single team season: use that row directly. Traded: use the real TOT row from NBA.com
+    const mainRow = teams.length > 1 ? tot : teams[0];
+    seasons.push({ year, label, tot: mainRow, teams });
   }
 
   const toggle = (year: number) => {
@@ -176,30 +175,27 @@ function CareerStatsCard({ career }: { career: any[] }) {
       </View>
 
       {seasons.map(({ year, label, tot, teams }, si) => {
-        const isMultiTeam = teams.length > 1 || (teams.length === 1 && tot);
+        const isMultiTeam = teams.length > 1;
         const isOpen = expanded.has(year);
-        // The "main" row: TOT if traded, otherwise the single team row
-        const mainRow = tot ?? teams[0];
-        const mainTeam = tot ? null : teams[0]?.Team;
 
         return (
           <View key={year}>
-            {/* Main row */}
             <TouchableOpacity
               activeOpacity={isMultiTeam ? 0.6 : 1}
               onPress={isMultiTeam ? () => toggle(year) : undefined}
               style={[s.careerRow, si > 0 && { borderTopWidth: 1, borderTopColor: '#2a2a2a' }]}
             >
               <View style={s.careerSeasonCell}>
-                {mainTeam ? (
-                  <Image source={{ uri: teamLogoUri(mainTeam) }} style={{ width: 20, height: 20 }} resizeMode="contain" />
-                ) : isMultiTeam ? (
-                  /* multiple teams — show chevron placeholder */
-                  <Text style={s.careerChevron}>{isOpen ? '▾' : '▸'}</Text>
+                {isMultiTeam ? (
+                  <View style={{ width: 20, height: 20, alignItems: 'center', justifyContent: 'center' }}>
+                    <Text style={s.careerTotText}>TOT</Text>
+                  </View>
+                ) : tot?.Team ? (
+                  <Image source={{ uri: teamLogoUri(tot.Team) }} style={{ width: 20, height: 20 }} resizeMode="contain" />
                 ) : null}
                 <Text style={s.careerSeason}>{label}</Text>
               </View>
-              <CareerStatCols row={mainRow} />
+              <CareerStatCols row={tot} />
             </TouchableOpacity>
 
             {/* Expanded team rows */}
@@ -229,24 +225,25 @@ export default function PlayerScreen({ route }: Props) {
   const [stats,    setStats]    = useState<PlayerStats | null>(null);
   const [logs,     setLogs]     = useState<PlayerGameStats[]>([]);
   const [career,   setCareer]   = useState<any[]>([]);
-  const [nbaId,    setNbaId]    = useState<number | undefined>(undefined);
   const [loading,  setLoading]  = useState(true);
   const [activeTab, setActiveTab] = useState<Tab>('Stats');
 
   useEffect(() => {
+    const safe = <T,>(p: Promise<T>): Promise<T | null> => p.catch(() => null);
+    // Load player, stats, and career in parallel — show immediately when ready
     Promise.all([
       NBAService.getPlayerById(playerId),
-      NBAService.getPlayerSeasonStats(playerId),
-      NBAService.getPlayerGameLogs(playerId),
-      NBAService.getNbaIdMap(),
-      NBAService.getPlayerCareerStats(playerId),
-    ]).then(([pRes, sRes, lRes, mapRes, careerRes]) => {
+      safe(NBAService.getPlayerSeasonStats(playerId)),
+      safe(NBAService.getPlayerCareerStats(playerId)),
+    ]).then(([pRes, sRes, careerRes]) => {
       setPlayer(pRes.player);
-      setCareer(careerRes.seasons ?? []);
-      setStats(sRes.stats ?? null);
-      setLogs((lRes.logs ?? []).reverse());
-      setNbaId(mapRes.map?.[playerId]);
+      setStats(sRes?.stats ?? null);
+      setCareer(careerRes?.seasons ?? []);
     }).catch(() => {}).finally(() => setLoading(false));
+
+    // Load game logs separately — doesn't block the player profile from showing
+    safe(NBAService.getPlayerGameLogs(playerId))
+      .then(lRes => setLogs((lRes?.logs ?? []).reverse()));
   }, [playerId]);
 
   const color = player ? (teamColors[player.Team] ?? '#555') : '#555';
@@ -271,7 +268,7 @@ export default function PlayerScreen({ route }: Props) {
     <SafeAreaView style={s.container}>
       {/* ── Header ── */}
       <View style={[s.header, { borderBottomColor: color }]}>
-        <PlayerPhoto player={player} nbaId={nbaId} size={72} />
+        <PlayerPhoto player={player} size={72} />
         <View style={{ flex: 1, marginLeft: 14 }}>
           <Text style={s.playerName}>{player.FirstName} {player.LastName}</Text>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 }}>
@@ -433,6 +430,7 @@ const s = StyleSheet.create({
   careerSeason:     { color: '#aaa', fontSize: 11, fontWeight: '600' },
   careerStat:       { flex: 1, color: '#ccc', fontSize: 10, textAlign: 'center' },
   careerChevron:    { width: 20, color: '#555', fontSize: 10, textAlign: 'center' },
+  careerTotText:    { color: '#fff', fontSize: 9, fontWeight: '700' },
 
   logRow:         { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 10 },
   logDate:        { width: 52, color: '#888', fontSize: 11 },

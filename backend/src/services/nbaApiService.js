@@ -12,6 +12,11 @@ import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const CACHE_DIR = join(__dirname, '../../../cache_nba');
+
+function decodeHtml(str) {
+  if (!str || !str.includes('&')) return str;
+  return str.replace(/&#(\d+);/g, (_, code) => String.fromCharCode(parseInt(code)));
+}
 if (!existsSync(CACHE_DIR)) mkdirSync(CACHE_DIR, { recursive: true });
 
 const memCache = new NodeCache();
@@ -972,6 +977,19 @@ function parseHeight(h) {
 
 // ── Players ───────────────────────────────────────────────────────────────────
 
+export async function getAllHistoricalPlayers() {
+  const seasonStr = toSeasonStr(currentSeason());
+  const data = await nbFetch('/stats/commonallplayers', {
+    LeagueID: '00', Season: seasonStr, IsOnlyCurrentSeason: 0,
+  }, 86400 * 7, `allplayers_historical_${currentSeason()}`);
+  const rows = parseRS(data.resultSets, 'CommonAllPlayers');
+  return rows.map(p => ({
+    PlayerID:  p.PERSON_ID,
+    FirstName: p.DISPLAY_FIRST_LAST?.split(' ')[0] ?? '',
+    LastName:  p.DISPLAY_FIRST_LAST?.split(' ').slice(1).join(' ') ?? '',
+  }));
+}
+
 export async function getAllPlayers() {
   const seasonStr = toSeasonStr(currentSeason());
   const data = await nbFetch('/stats/commonallplayers', {
@@ -1074,89 +1092,7 @@ const ESPN_GL_LABELS = ['MIN','FG','FG%','3PT','3P%','FT','FT%','REB','AST','BLK
 
 export async function getPlayerGameLogs(season, playerId) {
   season = parseInt(season);
-  const espnSeason = season + 1; // ESPN uses ending year (2026 for 2025-26)
-  const cacheKey = `espn_gamelogs_${playerId}_${season}`;
-
-  const cached = readDisk(cacheKey);
-  if (cached !== undefined) return cached;
-
-  // Resolve ESPN athlete ID
-  const espnId = await getEspnAthleteId(playerId);
-  if (!espnId) {
-    // Fallback to NBA API
-    return getNbaGameLogs(season, playerId);
-  }
-
-  try {
-    const { data } = await espnClient.get(
-      `https://site.web.api.espn.com/apis/common/v3/sports/basketball/nba/athletes/${espnId}/gamelog`,
-      { params: { season: espnSeason }, baseURL: '' }
-    );
-
-    const eventsMap = data.events ?? {};
-    const logs = [];
-
-    for (const st of (data.seasonTypes ?? [])) {
-      if (!st || !String(st.displayName ?? '').includes('Regular')) continue;
-      for (const cat of (st.categories ?? [])) {
-        for (const ev of (cat.events ?? [])) {
-          const eventData = eventsMap[ev.eventId] ?? {};
-          const stats = ev.stats ?? [];
-          const get = (label) => stats[ESPN_GL_LABELS.indexOf(label)] ?? '0';
-          const parseFrac = (s) => { const [m,a]=String(s).split('-').map(Number); return {made:m||0,att:a||0}; };
-          const fg  = parseFrac(get('FG'));
-          const tp  = parseFrac(get('3PT'));
-          const ft  = parseFrac(get('FT'));
-
-          const opp      = espnToApp(eventData.opponent?.abbreviation ?? '');
-          const atVs     = eventData.atVs ?? 'vs';
-          const isHome   = atVs === 'vs';
-          const gameDate = eventData.gameDate?.split('T')[0] ?? null;
-          const result   = eventData.gameResult ?? '';
-          const myScore  = isHome ? (eventData.homeTeamScore ?? null) : (eventData.awayTeamScore ?? null);
-          const oppScore = isHome ? (eventData.awayTeamScore ?? null) : (eventData.homeTeamScore ?? null);
-          const mins     = parseFloat(get('MIN')) || 0;
-
-          logs.push({
-            PlayerID:                Number(playerId),
-            Season:                  season,
-            GameID:                  parseInt(ev.eventId) || 0,
-            Opponent:                opp,
-            HomeOrAway:              isHome ? 'HOME' : 'AWAY',
-            Day:                     gameDate,
-            WinLoss:                 result,
-            TeamScore:               myScore,
-            OpponentScore:           oppScore,
-            Started:                 1,
-            Games:                   1,
-            Minutes:                 mins,
-            Points:                  parseInt(get('PTS')) || 0,
-            Rebounds:                parseInt(get('REB')) || 0,
-            Assists:                 parseInt(get('AST')) || 0,
-            Steals:                  parseInt(get('STL')) || 0,
-            BlockedShots:            parseInt(get('BLK')) || 0,
-            Turnovers:               parseInt(get('TO'))  || 0,
-            PersonalFouls:           parseInt(get('PF'))  || 0,
-            FieldGoalsMade:          fg.made, FieldGoalsAttempted:     fg.att,
-            FieldGoalsPercentage:    fg.att > 0 ? fg.made / fg.att : 0,
-            ThreePointersMade:       tp.made, ThreePointersAttempted:  tp.att,
-            ThreePointersPercentage: tp.att > 0 ? tp.made / tp.att : 0,
-            FreeThrowsMade:          ft.made, FreeThrowsAttempted:     ft.att,
-            FreeThrowsPercentage:    ft.att > 0 ? ft.made / ft.att : 0,
-            PlusMinus:               0, TrueShootingPercentage: 0,
-            PlayerEfficiencyRating:  0, DoubleDoubles: 0, TripleDoubles: 0,
-          });
-        }
-      }
-    }
-
-    // Sort oldest → newest
-    logs.sort((a, b) => (a.Day ?? '').localeCompare(b.Day ?? ''));
-    writeDisk(cacheKey, logs, 86400 * 30);
-    return logs;
-  } catch {
-    return getNbaGameLogs(season, playerId);
-  }
+  return getNbaGameLogs(season, playerId);
 }
 
 // Original NBA API game log fallback
@@ -1256,55 +1192,47 @@ export async function getAllPlayerSeasonStats(season) {
 // ── Player career stats ───────────────────────────────────────────────────────
 
 export async function getPlayerCareerStats(playerId) {
-  const cacheKey = `espn_career_${playerId}`;
+  const cacheKey = `career_seasons_${playerId}`;
   const cached = readDisk(cacheKey);
   if (cached !== undefined) return cached;
 
-  const espnId = await getEspnAthleteId(playerId);
-  if (!espnId) return [];
-
   try {
-    const { data } = await espnClient.get(
-      `https://site.web.api.espn.com/apis/common/v3/sports/basketball/nba/athletes/${espnId}/stats`,
-      { params: {}, baseURL: '' }
-    );
+    // Use NBA.com playercareerstats — works for active AND retired players
+    // Use a separate raw cache key so nbFetch doesn't collide with our processed result
+    const data = await nbFetch('/stats/playercareerstats', { PlayerID: playerId, PerMode: 'PerGame' }, 86400, `career_raw_${playerId}`);
+    const rows = parseRS(data.resultSets, 'SeasonTotalsRegularSeason');
+    if (!rows.length) return [];
 
-    const cats = data.categories ?? [];
-    const avgCat = cats.find(c => (c.displayName ?? '').includes('Averages'));
-    if (!avgCat) return [];
-
-    const labels = avgCat.labels ?? [];
-    const idx = (label) => labels.indexOf(label);
-
-    const seasons = (avgCat.statistics ?? []).map(s => {
-      const stats = s.stats ?? [];
-      const get   = (label) => stats[idx(label)] ?? '—';
-      const parseFrac = (s) => { const [m,a]=String(s).split('-').map(Number); return {made:m||0,att:a||0}; };
-      const fg = parseFrac(get('FG'));
-      const tp = parseFrac(get('3PT'));
-      const ft = parseFrac(get('FT'));
+    const seasons = rows.map(r => {
+      const seasonId = r.SEASON_ID ?? '';
+      // SEASON_ID is like "2017-18" — ending year for SeasonYear
+      const endYear = parseInt(seasonId.split('-')[0] ?? '0') + 1;
+      const gp = r.GP ?? 0;
       return {
-        Season:               s.season?.displayName ?? '—',
-        SeasonYear:           s.season?.year ?? 0,
-        Team:                 espnToApp(Object.values(data.teams ?? {}).find(t => String(t.id) === String(s.teamId))?.abbreviation ?? ''),
-        Games:                parseInt(get('GP'))  || 0,
-        Minutes:              parseFloat(get('MIN')) || 0,
-        Points:               parseFloat(get('PTS')) || 0,
-        Rebounds:             parseFloat(get('REB')) || 0,
-        Assists:              parseFloat(get('AST')) || 0,
-        Steals:               parseFloat(get('STL')) || 0,
-        BlockedShots:         parseFloat(get('BLK')) || 0,
-        Turnovers:            parseFloat(get('TO'))  || 0,
-        FieldGoalsMade:       fg.made, FieldGoalsAttempted: fg.att,
-        FieldGoalsPercentage: parseFloat(get('FG%')) || 0,
-        ThreePointersMade:    tp.made, ThreePointersAttempted: tp.att,
-        ThreePointersPercentage: parseFloat(get('3P%')) || 0,
-        FreeThrowsMade:       ft.made, FreeThrowsAttempted: ft.att,
-        FreeThrowsPercentage: parseFloat(get('FT%')) || 0,
+        Season:                  seasonId,
+        SeasonYear:              endYear,
+        Team:                    toAppAbbr(r.TEAM_ABBREVIATION ?? ''),
+        Games:                   gp,
+        Minutes:                 parseFloat(r.MIN)  || 0,
+        Points:                  parseFloat(r.PTS)  || 0,
+        Rebounds:                parseFloat(r.REB)  || 0,
+        Assists:                 parseFloat(r.AST)  || 0,
+        Steals:                  parseFloat(r.STL)  || 0,
+        BlockedShots:            parseFloat(r.BLK)  || 0,
+        Turnovers:               parseFloat(r.TOV)  || 0,
+        FieldGoalsMade:          r.FGM ?? 0,
+        FieldGoalsAttempted:     r.FGA ?? 0,
+        FieldGoalsPercentage:    parseFloat(r.FG_PCT)  || 0,
+        ThreePointersMade:       r.FG3M ?? 0,
+        ThreePointersAttempted:  r.FG3A ?? 0,
+        ThreePointersPercentage: parseFloat(r.FG3_PCT) || 0,
+        FreeThrowsMade:          r.FTM ?? 0,
+        FreeThrowsAttempted:     r.FTA ?? 0,
+        FreeThrowsPercentage:    parseFloat(r.FT_PCT)  || 0,
       };
     }).sort((a, b) => a.SeasonYear - b.SeasonYear);
 
-    writeDisk(cacheKey, seasons, 3600); // short TTL — current season updates
+    writeDisk(cacheKey, seasons, 3600);
     return seasons;
   } catch {
     return [];
@@ -1399,7 +1327,7 @@ export async function getDraftClass(year) {
       Overall:   pickData.overall ?? null,
       Round:     round,
       Pick:      pickData.pick ?? null,
-      Name:      a.fullName ?? a.displayName ?? '',
+      Name:      decodeHtml(a.fullName ?? a.displayName ?? ''),
       Position:  a.position?.abbreviation ?? '',
       Team:      teamAbbr,
       College:   a.leagueAffiliation ?? '',
@@ -1441,15 +1369,13 @@ export async function getDraftClass(year) {
     });
   }
 
-  // Batch-fetch most recent season averages for each pick
+  // Batch-fetch ESPN career stats for all picks that have an EspnId
   const statsClient = axios.create({ baseURL: 'https://site.web.api.espn.com', timeout: 10000 });
   const statsResults = await batchFetch(
     picks.map(p => p.EspnId
       ? `https://site.web.api.espn.com/apis/common/v3/sports/basketball/nba/athletes/${p.EspnId}/stats`
-      : '__skip__'
-    ),
-    15,
-    statsClient
+      : '__skip__'),
+    15, statsClient
   );
 
   picks.forEach((pick, i) => {
@@ -1459,18 +1385,15 @@ export async function getDraftClass(year) {
     if (!avgCat?.statistics?.length) { pick.Stats = null; return; }
     const labels = avgCat.labels ?? [];
     const idxOf  = (l) => labels.indexOf(l);
-
-    // Deduplicate by season year: for traded players ESPN returns one row per
-    // team PLUS a combined TOT row (teamId=undefined). Keep only the TOT row
-    // when multiple rows exist for the same year to avoid double-counting GP.
     const byYear = new Map();
     for (const season of avgCat.statistics) {
       const yr = season.season?.year ?? season.season?.displayName ?? 'unknown';
-      const isTot = season.teamId == null;
-      if (!byYear.has(yr) || isTot) byYear.set(yr, season);
+      const gpIdx = idxOf('GP');
+      const gp = parseFloat((season.stats ?? [])[gpIdx]) || 0;
+      const existing = byYear.get(yr);
+      const existingGp = existing ? parseFloat((existing.stats ?? [])[gpIdx]) || 0 : -1;
+      if (!existing || gp > existingGp) byYear.set(yr, season);
     }
-
-    // Compute career weighted averages across deduplicated seasons
     let totalGP = 0, sumPTS = 0, sumREB = 0, sumAST = 0;
     for (const season of byYear.values()) {
       const arr = season.stats ?? [];
@@ -1488,8 +1411,100 @@ export async function getDraftClass(year) {
       REB: Math.round(sumREB / totalGP * 10) / 10,
       AST: Math.round(sumAST / totalGP * 10) / 10,
     };
-    delete pick.EspnId; // clean up
+    delete pick.EspnId;
   });
+
+  // Resolve NBA.com player IDs — use full historical list so retired/inactive players resolve too
+  try {
+    const allPlayers = await getAllHistoricalPlayers();
+    const norm = str => str.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+
+    // Known ESPN display name → NBA.com display name mismatches (nicknames, Jr. omissions, etc.)
+    const ALIASES = {
+      'edrice adebayo':        'bam adebayo',
+      'guillermo hernangomez': 'willy hernangomez',
+      'dennis smith':          'dennis smith jr.',
+      'gary trent':            'gary trent jr.',
+      'wendell carter':        'wendell carter jr.',
+      'larry nance':           'larry nance jr.',
+      'tim hardaway':          'tim hardaway jr.',
+      'kelly oubre':           'kelly oubre jr.',
+      'otto porter':           'otto porter jr.',
+      'reggie bullock':        'reggie bullock jr.',
+      'ron holland':           'ronald holland ii',
+    };
+
+    const fullMap = new Map(allPlayers.map(p => [norm(`${p.FirstName} ${p.LastName}`), p.PlayerID]));
+
+    // Build init map but track collisions — don't use init key if multiple players share it
+    const initCount = new Map();
+    const initMap   = new Map();
+    for (const p of allPlayers) {
+      const key = norm(`${p.FirstName[0] ?? ''} ${p.LastName}`);
+      initCount.set(key, (initCount.get(key) ?? 0) + 1);
+      initMap.set(key, p.PlayerID);
+    }
+
+    picks.forEach(pick => {
+      const normName = norm(pick.Name);
+      const lookupName = ALIASES[normName] ?? normName;
+
+      if (fullMap.has(lookupName)) {
+        pick.NbaId = fullMap.get(lookupName);
+      } else {
+        // Try adding/removing generational suffixes — ESPN and NBA.com often disagree
+        const SUFFIXES = [' jr.', ' sr.', ' ii', ' iii', ' iv'];
+        const stripped = SUFFIXES.reduce((n, s) => n.endsWith(s) ? n.slice(0, -s.length).trim() : n, lookupName);
+        // Try each suffix appended, or try the stripped version
+        const suffixMatch = stripped !== lookupName
+          ? fullMap.get(stripped)
+          : SUFFIXES.map(s => fullMap.get(lookupName + s)).find(Boolean);
+        if (suffixMatch) { pick.NbaId = suffixMatch; }
+        else {
+          const parts = lookupName.split(' ');
+          const initKey = `${parts[0]?.[0] ?? ''} ${parts.slice(1).join(' ')}`;
+          pick.NbaId = (initCount.get(initKey) === 1) ? (initMap.get(initKey) ?? null) : null;
+        }
+      }
+
+      // Use NBA.com CDN headshot for any pick with a resolved NbaId — more reliable than ESPN for old/invalid IDs
+      if (pick.NbaId) {
+        pick.PhotoUrl = `https://cdn.nba.com/headshots/nba/latest/1040x760/${pick.NbaId}.png`;
+      }
+    });
+  } catch {}
+
+  // NBA.com fallback for picks where ESPN returned no stats — batched to avoid rate limiting
+  const nullStatPicks = picks.filter(p => p.Stats === null && p.NbaId);
+  for (let i = 0; i < nullStatPicks.length; i += 5) {
+    await Promise.all(nullStatPicks.slice(i, i + 5).map(async pick => {
+      try {
+        const data = await nbFetch('/stats/playercareerstats', { PlayerID: pick.NbaId, PerMode: 'PerGame' }, 86400 * 30, `career_pg_${pick.NbaId}`);
+        const rows = parseRS(data.resultSets, 'SeasonTotalsRegularSeason');
+        if (!rows.length) return;
+        const byYear = new Map();
+        for (const r of rows) {
+          const yr = r.SEASON_ID;
+          const gp = r.GP ?? 0;
+          if (!byYear.has(yr) || gp > (byYear.get(yr).GP ?? 0)) byYear.set(yr, { GP: gp, PTS: r.PTS ?? 0, REB: r.REB ?? 0, AST: r.AST ?? 0 });
+        }
+        let totalGP = 0, sumPTS = 0, sumREB = 0, sumAST = 0;
+        for (const s of byYear.values()) {
+          totalGP += s.GP;
+          sumPTS  += s.PTS * s.GP;
+          sumREB  += s.REB * s.GP;
+          sumAST  += s.AST * s.GP;
+        }
+        if (!totalGP) return;
+        pick.Stats = {
+          GP:  totalGP,
+          PTS: Math.round(sumPTS / totalGP * 10) / 10,
+          REB: Math.round(sumREB / totalGP * 10) / 10,
+          AST: Math.round(sumAST / totalGP * 10) / 10,
+        };
+      } catch {}
+    }));
+  }
 
   // Cache for a long time — draft data never changes
   writeDisk(cacheKey, picks, 86400 * 365);
