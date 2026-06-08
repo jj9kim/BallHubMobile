@@ -250,79 +250,20 @@ function MatchesTab({ standings }: { standings: Standing[] }) {
 const CURRENT_YEAR = new Date().getFullYear();
 const DRAFT_YEARS = Array.from({ length: CURRENT_YEAR - 2000 }, (_, i) => CURRENT_YEAR - i);
 
-function DraftPickRow({ pick, index }: { pick: any; index: number }) {
-  const [imgFailed, setImgFailed] = useState(false);
-  const isR2 = pick.Round === 2;
-  return (
-    <View style={[d.row, index % 2 === 1 && { backgroundColor: '#181818' }]}>
-      <View style={d.pickCell}>
-        <Text style={[d.overall, isR2 && { color: '#555' }]}>{pick.Overall}</Text>
-      </View>
-      <View style={d.photoWrap}>
-        {!imgFailed && pick.PhotoUrl ? (
-          <Image source={{ uri: pick.PhotoUrl }} style={d.photo} resizeMode="cover"
-            onError={() => setImgFailed(true)} />
-        ) : (
-          <View style={d.photoFallback}>
-            <Text style={d.photoInitials}>{pick.Name?.split(' ').pop()?.slice(0,2)}</Text>
-          </View>
-        )}
-      </View>
-      <View style={{ flex: 1, marginLeft: 10 }}>
-        <Text style={d.name} numberOfLines={1}>{pick.Name}</Text>
-        <Text style={d.meta}>{pick.Position}{pick.College ? ` · ${pick.College}` : ''}</Text>
-      </View>
-      {pick.Team ? (
-        <Image source={{ uri: teamLogoUri(pick.Team) }} style={d.teamLogo} resizeMode="contain" />
-      ) : <View style={d.teamLogo} />}
-      <View style={d.roundBadge}>
-        <Text style={[d.roundText, isR2 && { color: '#555' }]}>R{pick.Round}P{pick.Pick}</Text>
-      </View>
-    </View>
-  );
-}
-
-function DraftYearAccordion({ year }: { year: number }) {
-  const [open, setOpen]       = useState(false);
-  const [picks, setPicks]     = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [loaded, setLoaded]   = useState(false);
-
-  const toggle = () => {
-    if (!open && !loaded) {
-      setLoading(true);
-      NBAService.getDraftClass(year)
-        .then(res => { setPicks(res.picks ?? []); setLoaded(true); setLoading(false); })
-        .catch(() => setLoading(false));
-    }
-    setOpen(o => !o);
-  };
-
-  return (
-    <View style={d.accordion}>
-      <TouchableOpacity style={d.accordionHeader} onPress={toggle} activeOpacity={0.7}>
-        <Text style={d.accordionTitle}>{year} NBA Entry Draft</Text>
-        <Text style={d.accordionChevron}>{open ? '▾' : '▸'}</Text>
-      </TouchableOpacity>
-
-      {open && (
-        <View>
-          {loading ? (
-            <ActivityIndicator color="#888" style={{ marginVertical: 20 }} />
-          ) : (
-            picks.map((pick, i) => <DraftPickRow key={`${year}-${i}`} pick={pick} index={i} />)
-          )}
-        </View>
-      )}
-    </View>
-  );
-}
-
 function DraftTab() {
+  const navigation = useNavigation<Nav>();
   return (
     <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
-      {DRAFT_YEARS.map(year => (
-        <DraftYearAccordion key={year} year={year} />
+      {DRAFT_YEARS.map((year, i) => (
+        <TouchableOpacity
+          key={year}
+          style={[d.yearRow, i > 0 && { borderTopWidth: 1, borderTopColor: '#1e1e1e' }]}
+          onPress={() => navigation.navigate('Draft', { year })}
+          activeOpacity={0.7}
+        >
+          <Text style={d.yearRowTitle}>{year} NBA Entry Draft</Text>
+          <Text style={d.yearRowChevron}>›</Text>
+        </TouchableOpacity>
       ))}
     </ScrollView>
   );
@@ -419,22 +360,8 @@ const s = StyleSheet.create({
 });
 
 const d = StyleSheet.create({
-  accordion:       { borderBottomWidth: 1, borderBottomColor: '#1e1e1e' },
-  accordionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-                     paddingHorizontal: 16, paddingVertical: 16 },
-  accordionTitle:  { color: '#fff', fontSize: 15, fontWeight: '700' },
-  accordionChevron:{ color: '#555', fontSize: 16 },
-
-  row:          { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 10 },
-  pickCell:     { width: 32, alignItems: 'center' },
-  overall:      { color: '#fff', fontSize: 15, fontWeight: '800' },
-  photoWrap:    { width: 44, height: 44, borderRadius: 22, overflow: 'hidden', backgroundColor: '#2a2a2a' },
-  photo:        { width: '100%', height: '100%' },
-  photoFallback:{ width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center', backgroundColor: '#2a2a2a' },
-  photoInitials:{ color: '#555', fontSize: 12, fontWeight: '800' },
-  name:         { color: '#fff', fontSize: 14, fontWeight: '700' },
-  meta:         { color: '#555', fontSize: 11, marginTop: 2 },
-  teamLogo:     { width: 28, height: 28, marginHorizontal: 8 },
-  roundBadge:   { minWidth: 44, alignItems: 'center', paddingHorizontal: 4 },
-  roundText:    { color: '#888', fontSize: 10, fontWeight: '700' },
+  yearRow:        { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+                    paddingHorizontal: 16, paddingVertical: 18 },
+  yearRowTitle:   { color: '#fff', fontSize: 15, fontWeight: '600' },
+  yearRowChevron: { color: '#555', fontSize: 20, fontWeight: '300' },
 });

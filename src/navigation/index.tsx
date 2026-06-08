@@ -11,12 +11,14 @@ import TeamsScreen from '../screens/TeamsScreen';
 import TeamScreen from '../screens/TeamScreen';
 import PlayerScreen from '../screens/PlayerScreen';
 import PlayersScreen from '../screens/PlayersScreen';
+import DraftScreen from '../screens/DraftScreen';
 
 export type RootStackParamList = {
   MainTabs: undefined;
   Game: { gameId: number; gameDate: string };
   TeamProfile: { teamKey: string; teamCity: string; teamName: string };
   PlayerProfile: { playerId: number };
+  Draft: { year: number };
 };
 
 export type TabParamList = {
@@ -100,6 +102,19 @@ export default function Navigation() {
             headerBackTitle: 'Roster',
             headerShadowVisible: false,
           }}
+        />
+        <Stack.Screen
+          name="Draft"
+          component={DraftScreen}
+          options={({ route }) => ({
+            headerShown: true,
+            headerStyle: { backgroundColor: '#141414' },
+            headerTintColor: '#fff',
+            headerTitle: `${(route.params as any).year} NBA Draft`,
+            headerTitleStyle: { color: '#fff', fontWeight: '700' },
+            headerBackTitle: 'Drafts',
+            headerShadowVisible: false,
+          })}
         />
       </Stack.Navigator>
     </NavigationContainer>
