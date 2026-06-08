@@ -47,17 +47,20 @@ function DraftPickRow({ pick, index }: { pick: any; index: number }) {
               ? <Image source={{ uri: teamLogoUri(pick.Team) }} style={s.teamLogo} resizeMode="contain" />
               : <View style={s.teamLogo} />}
             <Text style={s.meta} numberOfLines={1}>
-              {pick.Position}{pick.College ? ` · ${pick.College}` : ''}
+              {` · ${pick.Position}${pick.College ? ` · ${pick.College}` : ''}`}
             </Text>
           </View>
-          {/* Stats */}
+          {/* Stats — centered in remaining space */}
           <View style={s.statsRow}>
-            {([['GP', st?.GP ?? '—'], ['PTS', fmt(st?.PTS)], ['REB', fmt(st?.REB)], ['AST', fmt(st?.AST)]] as [string, string|number][]).map(([lbl, val]) => (
-              <View key={lbl} style={s.statCell}>
-                <Text style={s.statVal}>{val}</Text>
-                <Text style={s.statLbl}>{lbl}</Text>
-              </View>
-            ))}
+            {(['GP', 'PTS', 'REB', 'AST'] as const).map((lbl) => {
+              const val = lbl === 'GP' ? (st?.GP ?? '—') : fmt(st?.[lbl as keyof typeof st]);
+              return (
+                <View key={lbl} style={s.statCell}>
+                  <Text style={s.statVal}>{val}</Text>
+                  <Text style={s.statLbl}>{lbl}</Text>
+                </View>
+              );
+            })}
           </View>
         </View>
       </View>
@@ -124,13 +127,13 @@ const s = StyleSheet.create({
 
   infoCell:     { flex: 1, marginLeft: 8 },
   name:         { color: '#fff', fontSize: 13, fontWeight: '700' },
-  bottomRow:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 },
-  metaGroup:    { flexDirection: 'row', alignItems: 'center', gap: 5, flex: 1 },
+  bottomRow:    { flexDirection: 'row', alignItems: 'center', marginTop: 4 },
+  metaGroup:    { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 4 },
   teamLogo:     { width: 20, height: 20 },
   meta:         { color: '#555', fontSize: 10, flexShrink: 1 },
 
-  statsRow:     { flexDirection: 'row' },
-  statCell:     { width: 32, alignItems: 'center' },
+  statsRow:     { flex: 1, flexDirection: 'row', justifyContent: 'center', gap: 2 },
+  statCell:     { width: 34, alignItems: 'center' },
   statVal:      { color: '#aaa', fontSize: 11, fontWeight: '600' },
   statLbl:      { color: '#555', fontSize: 9, fontWeight: '600' },
 
