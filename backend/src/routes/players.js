@@ -47,6 +47,8 @@ router.get('/:id', async (req, res) => {
     const player = await getPlayerById(req.params.id);
     if (!player) return res.status(404).json({ success: false, error: 'Player not found' });
     res.json({ success: true, player });
+    // Pre-warm career stats in background so next profile load is instant
+    getPlayerCareerStats(req.params.id).catch(() => {});
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }

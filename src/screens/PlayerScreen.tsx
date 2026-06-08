@@ -219,7 +219,7 @@ function CareerStatsCard({ career }: { career: any[] }) {
 // ── Main screen ───────────────────────────────────────────────────────────────
 
 export default function PlayerScreen({ route }: Props) {
-  const { playerId } = route.params;
+  const { playerId, fallback } = route.params;
 
   const [player,   setPlayer]   = useState<Player | null>(null);
   const [stats,    setStats]    = useState<PlayerStats | null>(null);
@@ -230,18 +230,16 @@ export default function PlayerScreen({ route }: Props) {
 
   useEffect(() => {
     const safe = <T,>(p: Promise<T>): Promise<T | null> => p.catch(() => null);
-    // Load player, stats, and career in parallel — show immediately when ready
     Promise.all([
-      NBAService.getPlayerById(playerId),
+      safe(NBAService.getPlayerById(playerId)),
       safe(NBAService.getPlayerSeasonStats(playerId)),
       safe(NBAService.getPlayerCareerStats(playerId)),
     ]).then(([pRes, sRes, careerRes]) => {
-      setPlayer(pRes.player);
+      if (pRes?.player) setPlayer(pRes.player);
       setStats(sRes?.stats ?? null);
       setCareer(careerRes?.seasons ?? []);
     }).catch(() => {}).finally(() => setLoading(false));
 
-    // Load game logs separately — doesn't block the player profile from showing
     safe(NBAService.getPlayerGameLogs(playerId))
       .then(lRes => setLogs((lRes?.logs ?? []).reverse()));
   }, [playerId]);

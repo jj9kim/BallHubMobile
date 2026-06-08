@@ -21,23 +21,26 @@ if (!existsSync(CACHE_DIR)) mkdirSync(CACHE_DIR, { recursive: true });
 
 const memCache = new NodeCache();
 
+
 // ── NBA API client ────────────────────────────────────────────────────────────
 
-const nbaClient = axios.create({
-  baseURL: 'https://stats.nba.com',
-  timeout: 15000,
-  headers: {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    'Referer': 'https://www.nba.com/',
-    'Accept': 'application/json, text/plain, */*',
-    'Accept-Language': 'en-US,en;q=0.9',
-    'x-nba-stats-origin': 'stats',
-    'x-nba-stats-token': 'true',
-    'Connection': 'keep-alive',
-    'Host': 'stats.nba.com',
-    'Origin': 'https://www.nba.com',
-  },
-});
+const NBA_HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+  'Referer': 'https://www.nba.com/',
+  'Accept': 'application/json, text/plain, */*',
+  'Accept-Language': 'en-US,en;q=0.9',
+  'x-nba-stats-origin': 'stats',
+  'x-nba-stats-token': 'true',
+  'Connection': 'keep-alive',
+  'Host': 'stats.nba.com',
+  'Origin': 'https://www.nba.com',
+};
+
+// Fast client for live/real-time data (games, standings, rosters)
+const nbaClient = axios.create({ baseURL: 'https://stats.nba.com', timeout: 12000, headers: NBA_HEADERS });
+
+// Slow client for static player/career data that needs more time
+const nbaSlowClient = axios.create({ baseURL: 'https://stats.nba.com', timeout: 45000, headers: NBA_HEADERS });
 
 const espnClient = axios.create({
   baseURL: 'https://site.api.espn.com',
@@ -73,6 +76,12 @@ function writeDisk(key, data, ttl) {
   try { writeFileSync(file, JSON.stringify({ data, expires: Date.now() + ttl * 1000 })); } catch {}
 }
 
+export function existsDisk(key) {
+  return existsSync(join(CACHE_DIR, fileKey(key)));
+}
+
+const SLOW_PATHS = ['/stats/commonplayerinfo', '/stats/playercareerstats', '/stats/commonallplayers'];
+
 async function nbFetch(path, params = {}, ttl = 300, cacheKey = null) {
   const key = cacheKey ?? (path + JSON.stringify(params));
 
@@ -82,8 +91,9 @@ async function nbFetch(path, params = {}, ttl = 300, cacheKey = null) {
   const disk = readDisk(key);
   if (disk !== undefined) { memCache.set(key, disk, ttl); return disk; }
 
+  const client = SLOW_PATHS.some(p => path.startsWith(p)) ? nbaSlowClient : nbaClient;
   try {
-    const { data } = await nbaClient.get(path, { params });
+    const { data } = await client.get(path, { params });
     memCache.set(key, data, ttl);
     writeDisk(key, data, ttl);
     return data;
@@ -987,7 +997,22 @@ export async function getAllHistoricalPlayers() {
     PlayerID:  p.PERSON_ID,
     FirstName: p.DISPLAY_FIRST_LAST?.split(' ')[0] ?? '',
     LastName:  p.DISPLAY_FIRST_LAST?.split(' ').slice(1).join(' ') ?? '',
+    Team:      toAppAbbr(p.TEAM_ABBREVIATION ?? ''),
+    TeamID:    p.TEAM_ID ?? 0,
+    Status:    p.ROSTERSTATUS === '1' ? 'Active' : 'Inactive',
+    PhotoUrl:  `https://cdn.nba.com/headshots/nba/latest/1040x760/${p.PERSON_ID}.png`,
+    FromYear:  p.FROM_YEAR ?? null,
+    ToYear:    p.TO_YEAR ?? null,
   }));
+}
+
+// Build a map of PlayerID → historical player for fast lookup
+let _historicalMap = null;
+async function getHistoricalPlayerMap() {
+  if (_historicalMap) return _historicalMap;
+  const players = await getAllHistoricalPlayers();
+  _historicalMap = new Map(players.map(p => [p.PlayerID, p]));
+  return _historicalMap;
 }
 
 export async function getAllPlayers() {
@@ -1018,38 +1043,63 @@ export async function getAllPlayers() {
 }
 
 export async function getPlayerById(playerId) {
-  const data = await nbFetch('/stats/commonplayerinfo', {
-    PlayerID: playerId,
-  }, 86400, `player_${playerId}`);
-
-  const rows = parseRS(data.resultSets, 'CommonPlayerInfo');
-  if (!rows.length) return null;
-  const p = rows[0];
-
-  return {
-    PlayerID:    p.PERSON_ID,
-    FirstName:   p.FIRST_NAME ?? '',
-    LastName:    p.LAST_NAME ?? '',
-    Team:        toAppAbbr(p.TEAM_ABBREVIATION ?? ''),
-    TeamID:      p.TEAM_ID ?? 0,
-    Position:    p.POSITION ?? '',
-    Jersey:      parseInt(p.JERSEY) || 0,
-    Height:      parseHeight(p.HEIGHT),
-    Weight:      parseInt(p.WEIGHT) || 0,
-    BirthDate:   p.BIRTHDATE?.split('T')[0] ?? null,
-    BirthCity:   p.BIRTHCITY ?? '',
-    BirthState:  p.BIRTHSTATE ?? '',
-    BirthCountry: p.COUNTRY ?? '',
-    College:     p.SCHOOL ?? null,
-    Experience:  parseInt(p.SEASON_EXP) || 0,
-    Salary:      0,
-    Status:      p.ROSTERSTATUS ?? 'Active',
-    PhotoUrl:    `https://cdn.nba.com/headshots/nba/latest/1040x760/${p.PERSON_ID}.png`,
-    NbaDotComPlayerID: p.PERSON_ID,
-    DraftYear:   p.DRAFT_YEAR ? parseInt(p.DRAFT_YEAR) : null,
-    DraftRound:  p.DRAFT_ROUND ? parseInt(p.DRAFT_ROUND) : null,
-    DraftPick:   p.DRAFT_NUMBER ? parseInt(p.DRAFT_NUMBER) : null,
-  };
+  try {
+    const data = await nbFetch('/stats/commonplayerinfo', { PlayerID: playerId }, 86400, `player_${playerId}`);
+    const rows = parseRS(data.resultSets, 'CommonPlayerInfo');
+    if (!rows.length) throw new Error('empty');
+    const p = rows[0];
+    return {
+      PlayerID:    p.PERSON_ID,
+      FirstName:   p.FIRST_NAME ?? '',
+      LastName:    p.LAST_NAME ?? '',
+      Team:        toAppAbbr(p.TEAM_ABBREVIATION ?? ''),
+      TeamID:      p.TEAM_ID ?? 0,
+      Position:    p.POSITION ?? '',
+      Jersey:      parseInt(p.JERSEY) || 0,
+      Height:      parseHeight(p.HEIGHT),
+      Weight:      parseInt(p.WEIGHT) || 0,
+      BirthDate:   p.BIRTHDATE?.split('T')[0] ?? null,
+      BirthCity:   p.BIRTHCITY ?? '',
+      BirthState:  p.BIRTHSTATE ?? '',
+      BirthCountry: p.COUNTRY ?? '',
+      College:     p.SCHOOL ?? null,
+      Experience:  parseInt(p.SEASON_EXP) || 0,
+      Salary:      0,
+      Status:      p.ROSTERSTATUS ?? 'Active',
+      PhotoUrl:    `https://cdn.nba.com/headshots/nba/latest/1040x760/${p.PERSON_ID}.png`,
+      NbaDotComPlayerID: p.PERSON_ID,
+      DraftYear:   p.DRAFT_YEAR ? parseInt(p.DRAFT_YEAR) : null,
+      DraftRound:  p.DRAFT_ROUND ? parseInt(p.DRAFT_ROUND) : null,
+      DraftPick:   p.DRAFT_NUMBER ? parseInt(p.DRAFT_NUMBER) : null,
+    };
+  } catch {
+    // Fall back to bulk historical data — always available, no rate limiting
+    const map = await getHistoricalPlayerMap();
+    const p = map.get(parseInt(playerId));
+    if (!p) return null;
+    return {
+      PlayerID:    p.PlayerID,
+      FirstName:   p.FirstName,
+      LastName:    p.LastName,
+      Team:        p.Team,
+      TeamID:      p.TeamID,
+      Position:    '',
+      Jersey:      0,
+      Height:      0,
+      Weight:      0,
+      BirthDate:   null,
+      BirthCity:   '',
+      BirthState:  '',
+      BirthCountry: '',
+      College:     null,
+      Experience:  0,
+      Salary:      0,
+      Status:      p.Status,
+      PhotoUrl:    p.PhotoUrl,
+      NbaDotComPlayerID: p.PlayerID,
+      DraftYear:   null, DraftRound: null, DraftPick: null,
+    };
+  }
 }
 
 // ── Player game logs ──────────────────────────────────────────────────────────
@@ -1232,7 +1282,7 @@ export async function getPlayerCareerStats(playerId) {
       };
     }).sort((a, b) => a.SeasonYear - b.SeasonYear);
 
-    writeDisk(cacheKey, seasons, 3600);
+    writeDisk(cacheKey, seasons, seasons.length > 0 ? 3600 : 300);
     return seasons;
   } catch {
     return [];
@@ -1251,7 +1301,31 @@ export async function getDraftClass(year) {
   const cacheKey = `draft_class_${year}`;
 
   const cached = readDisk(cacheKey);
-  if (cached !== undefined) return cached;
+  if (cached !== undefined) {
+    // Fix stats in background using career_seasons_ cache as ground truth (corrects wrong ESPN data)
+    const fixablePicks = cached.filter(p => p.NbaId && existsDisk(`career_seasons_${p.NbaId}`));
+    let needsSave = false;
+    for (const pick of fixablePicks) {
+      const seasons = readDisk(`career_seasons_${pick.NbaId}`);
+      if (!seasons?.length) continue;
+      // Aggregate career totals from the verified career_seasons data
+      const byYear = new Map();
+      for (const s of seasons) {
+        const yr = s.Season;
+        if (!byYear.has(yr) || s.Games > (byYear.get(yr).Games ?? 0)) byYear.set(yr, s);
+      }
+      let totalGP = 0, sumPTS = 0, sumREB = 0, sumAST = 0;
+      for (const s of byYear.values()) {
+        totalGP += s.Games; sumPTS += s.Points * s.Games; sumREB += s.Rebounds * s.Games; sumAST += s.Assists * s.Games;
+      }
+      if (!totalGP) continue;
+      const correct = { GP: totalGP, PTS: Math.round(sumPTS/totalGP*10)/10, REB: Math.round(sumREB/totalGP*10)/10, AST: Math.round(sumAST/totalGP*10)/10 };
+      // Only update if different (fixes wrong ESPN data like Tito Maddox 583 GP)
+      if (!pick.Stats || pick.Stats.GP !== correct.GP) { pick.Stats = correct; needsSave = true; }
+    }
+    if (needsSave) writeDisk(cacheKey, cached, 86400 * 365);
+    return cached;
+  }
 
   const coreClient = axios.create({ baseURL: 'https://sports.core.api.espn.com', timeout: 12000 });
 

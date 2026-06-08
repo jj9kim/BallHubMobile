@@ -17,7 +17,7 @@ export type RootStackParamList = {
   MainTabs: undefined;
   Game: { gameId: number; gameDate: string };
   TeamProfile: { teamKey: string; teamCity: string; teamName: string };
-  PlayerProfile: { playerId: number };
+  PlayerProfile: { playerId: number; fallback?: { name: string; team: string; position: string; photoUrl: string } };
   Draft: { year: number };
 };
 

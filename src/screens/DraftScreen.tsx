@@ -31,7 +31,10 @@ function DraftPickRow({
   const canNav = !!pick.NbaId;
 
   const goToPlayer = () => {
-    if (canNav) navigation.navigate('PlayerProfile', { playerId: pick.NbaId });
+    if (canNav) navigation.navigate('PlayerProfile', {
+      playerId: pick.NbaId,
+      fallback: { name: pick.Name, team: pick.Team ?? '', position: pick.Position ?? '', photoUrl: pick.PhotoUrl ?? '' },
+    });
   };
 
   return (
