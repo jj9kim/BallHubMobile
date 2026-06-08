@@ -41,7 +41,7 @@ function DraftPickRow({ pick, index }: { pick: any; index: number }) {
 
       {/* Name + position */}
       <View style={s.nameCell}>
-        <Text style={s.name} numberOfLines={1}>{pick.Name}</Text>
+        <Text style={s.name} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>{pick.Name}</Text>
         <Text style={s.meta}>{pick.Position}{pick.College ? ` · ${pick.College}` : ''}</Text>
       </View>
 
