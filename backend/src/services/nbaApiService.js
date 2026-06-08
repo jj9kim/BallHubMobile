@@ -1381,9 +1381,15 @@ export async function getDraftClass(year) {
     const teamAbbr = teamEspnId ? (ESPN_ID_TO_APP[parseInt(teamEspnId)] ?? null) : null;
 
     // Draft athlete ID from $ref (for headshot)
-    const draftId = a.id ?? '';
-    const headshotUrl = a.headshot?.href ||
-      `https://a.espncdn.com/i/headshots/nbadraft/players/full/${draftId}.png`;
+    const draftId    = a.id ?? '';
+    const athleteRef = a.athlete?.['$ref'] ?? '';
+    // NBA athlete ref: /nba/athletes/ID  — use directly
+    // College athlete ref: /mens-college-basketball/athletes/ID — same ID works for NBA headshot
+    const espnId = athleteRef.match(/\/athletes\/(\d+)/)?.[1];
+    const rawHref = espnId
+      ? `//a.espncdn.com/i/headshots/nba/players/full/${espnId}.png`
+      : (a.headshot?.href || `//a.espncdn.com/i/headshots/nbadraft/players/full/${draftId}.png`);
+    const headshotUrl = rawHref.startsWith('//') ? `https:${rawHref}` : rawHref;
 
     return {
       Overall:   pickData.overall ?? null,
