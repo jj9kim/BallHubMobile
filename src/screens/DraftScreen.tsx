@@ -45,7 +45,7 @@ function DraftPickRow({ pick, index }: { pick: any; index: number }) {
             ? <Image source={{ uri: teamLogoUri(pick.Team) }} style={s.teamLogo} resizeMode="contain" />
             : <View style={s.teamLogo} />}
           <Text style={s.meta} numberOfLines={1}>
-            {`  ·  ${pick.Position}${pick.College ? `  ·  ${pick.College}` : ''}`}
+            {` ·  ${pick.Position}${pick.College ? `  ·  ${pick.College}` : ''}`}
           </Text>
         </View>
       </View>
