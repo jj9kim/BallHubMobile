@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, SafeAreaView, FlatList,
-  Image, ActivityIndicator,
+  Image, ActivityIndicator, TouchableOpacity,
 } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation';
@@ -60,8 +60,9 @@ function DraftPickRow({ pick, index }: { pick: any; index: number }) {
 
 export default function DraftScreen({ route }: Props) {
   const { year } = route.params;
-  const [picks, setPicks]   = useState<any[]>([]);
+  const [picks, setPicks]     = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [round, setRound]     = useState<0 | 1 | 2>(0);
 
   useEffect(() => {
     NBAService.getDraftClass(year)
@@ -69,19 +70,32 @@ export default function DraftScreen({ route }: Props) {
       .catch(() => setLoading(false));
   }, [year]);
 
+  const filtered = round === 0 ? picks : picks.filter(p => p.Round === round);
+
   return (
     <SafeAreaView style={s.container}>
+      {/* Round filter */}
+      <View style={s.filterBar}>
+        {([['All', 0], ['Round 1', 1], ['Round 2', 2]] as [string, 0|1|2][]).map(([label, val]) => (
+          <TouchableOpacity
+            key={val}
+            style={[s.filterChip, round === val && s.filterChipActive]}
+            onPress={() => setRound(val)}
+          >
+            <Text style={[s.filterText, round === val && s.filterTextActive]}>{label}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
       {loading ? (
         <ActivityIndicator color="#fff" style={{ flex: 1 }} />
       ) : (
         <FlatList
-          data={picks}
+          data={filtered}
           keyExtractor={(_, i) => String(i)}
           renderItem={({ item, index }) => <DraftPickRow pick={item} index={index} />}
           contentContainerStyle={{ paddingBottom: 40 }}
-          ListEmptyComponent={
-            <Text style={s.empty}>No draft data available</Text>
-          }
+          ListEmptyComponent={<Text style={s.empty}>No draft data available</Text>}
         />
       )}
     </SafeAreaView>
@@ -108,4 +122,10 @@ const s = StyleSheet.create({
 
   roundBadge:   { minWidth: 46, alignItems: 'flex-end' },
   roundText:    { color: '#888', fontSize: 10, fontWeight: '700' },
+
+  filterBar:        { flexDirection: 'row', gap: 8, paddingHorizontal: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#1e1e1e' },
+  filterChip:       { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, backgroundColor: '#242424' },
+  filterChipActive: { backgroundColor: '#fff' },
+  filterText:       { color: '#777', fontSize: 12, fontWeight: '600' },
+  filterTextActive: { color: '#000', fontWeight: '700' },
 });

@@ -248,7 +248,9 @@ function MatchesTab({ standings }: { standings: Standing[] }) {
 // ── Draft Tab ─────────────────────────────────────────────────────────────────
 
 const CURRENT_YEAR = new Date().getFullYear();
-const DRAFT_YEARS = Array.from({ length: CURRENT_YEAR - 2000 }, (_, i) => CURRENT_YEAR - i);
+// NBA Draft happens in June — if before June, current year's draft hasn't happened yet
+const LATEST_DRAFT = new Date().getMonth() >= 5 ? CURRENT_YEAR : CURRENT_YEAR - 1;
+const DRAFT_YEARS = Array.from({ length: LATEST_DRAFT - 2000 }, (_, i) => LATEST_DRAFT - i);
 
 function DraftTab() {
   const navigation = useNavigation<Nav>();
