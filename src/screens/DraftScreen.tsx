@@ -41,7 +41,7 @@ function DraftPickRow({ pick, index }: { pick: any; index: number }) {
 
       {/* Name + position */}
       <View style={s.nameCell}>
-        <Text style={s.name} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>{pick.Name}</Text>
+        <Text style={s.name} numberOfLines={1}>{pick.Name}</Text>
         <Text style={s.meta}>{pick.Position}{pick.College ? ` · ${pick.College}` : ''}</Text>
       </View>
 
@@ -132,7 +132,7 @@ const s = StyleSheet.create({
   photoFallback:{ width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center', backgroundColor: '#2a2a2a' },
   photoInitials:{ color: '#555', fontSize: 13, fontWeight: '800' },
 
-  name:         { color: '#fff', fontSize: 14, fontWeight: '700' },
+  name:         { color: '#fff', fontSize: 12, fontWeight: '700' },
   meta:         { color: '#555', fontSize: 11, marginTop: 2 },
 
   teamLogo:     { width: 30, height: 30, marginHorizontal: 8 },
