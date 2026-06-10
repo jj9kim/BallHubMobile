@@ -53,7 +53,12 @@ const ESPN_TEAM_IDS = {
   HOU:10, IND:11, LAC:12, LAL:13, MEM:29, MIA:14, MIL:15, MIN:16,
   BKN:17, NY:18, ORL:19, PHI:20, PHO:21, POR:22, SAC:23, SA:24,
   OKC:25, UTAH:26, WSH:27, TOR:28, CHA:30,
+  // App abbreviation aliases — listed last so ESPN_ID_TO_APP resolves to these
+  NOP:3, UTA:26, WAS:27,
 };
+
+// Legacy ESPN abbreviations that exist in cached draft data
+export const ESPN_TEAM_ALIASES = { NOP: ['NOP','NO'], UTA: ['UTA','UTAH'], WAS: ['WAS','WSH'] };
 
 // ── Cache helpers ─────────────────────────────────────────────────────────────
 

@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getAllTeams, getTeamRoster, getTeamSchedule, getDraftClass, getTeamSalaries } from '../services/nbaApiService.js';
+import { getAllTeams, getTeamRoster, getTeamSchedule, getDraftClass, getTeamSalaries, ESPN_TEAM_ALIASES } from '../services/nbaApiService.js';
 
 const router = Router();
 
@@ -73,10 +73,11 @@ router.get('/:team/draftpicks', async (req, res) => {
     const currentYear = new Date().getFullYear();
     const years = Array.from({ length: currentYear - START_YEAR + 1 }, (_, i) => START_YEAR + i);
 
+    const aliases = ESPN_TEAM_ALIASES[teamAbbr] ?? [teamAbbr];
     const picksWithYear = (await Promise.all(
       years.map(async y => {
         const picks = await getDraftClass(y).catch(() => []);
-        return picks.filter(p => p.Team === teamAbbr).map(p => ({ ...p, DraftYear: y }));
+        return picks.filter(p => aliases.includes(p.Team)).map(p => ({ ...p, DraftYear: y }));
       })
     )).flat();
 
