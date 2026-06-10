@@ -49,7 +49,7 @@ const espnClient = axios.create({
 
 // App abbreviation → ESPN team ID
 const ESPN_TEAM_IDS = {
-  ATL:1, BOS:2, NO:3, CHI:4, CLE:5, DAL:6, DEN:7, DET:8, GS:9,
+  ATL:1, BOS:2, NO:3, CHI:4, CLE:5, DAL:6, DEN:7, DET:8, GS:9, GSW:9,
   HOU:10, IND:11, LAC:12, LAL:13, MEM:29, MIA:14, MIL:15, MIN:16,
   BKN:17, NY:18, ORL:19, PHI:20, PHO:21, POR:22, SAC:23, SA:24,
   OKC:25, UTAH:26, WSH:27, TOR:28, CHA:30,
@@ -959,6 +959,66 @@ export async function getAllTeams() {
     Division:   t.Division,
     WikipediaLogoUrl: `https://cdn.nba.com/logos/nba/${t.TeamID}/global/L/logo.svg`,
   }));
+}
+
+export async function getTeamSalaries(teamAbbr) {
+  const espnTeamId = ESPN_TEAM_IDS[teamAbbr];
+  if (!espnTeamId) throw new Error(`Unknown team: ${teamAbbr}`);
+  const cacheKey = `salaries_${teamAbbr}`;
+  const cached = readDisk(cacheKey);
+  if (cached !== undefined) return cached;
+
+  const { data } = await espnClient.get(`/apis/site/v2/sports/basketball/nba/teams/${espnTeamId}/roster`);
+  const OPTION_LABELS = { 0: null, 1: 'Player Option', 2: 'Team Option', 3: 'Two-Way', 4: 'Two-Way' };
+  const CURRENT_YEAR = new Date().getFullYear();
+  const coreClient = axios.create({ baseURL: 'https://sports.core.api.espn.com', timeout: 10000 });
+
+  // Build base player list from roster
+  const basePlayers = (data.athletes ?? []).map(a => ({
+    EspnId:         a.id,
+    Name:           a.fullName ?? a.displayName ?? '',
+    PhotoUrl:       a.headshot?.href ?? null,
+    Jersey:         a.jersey ?? null,
+    Position:       a.position?.abbreviation ?? '',
+    Salary:         a.contract?.salary ?? 0,
+    YearsRemaining: a.contract?.yearsRemaining ?? 0,
+    OptionType:     OPTION_LABELS[a.contract?.optionType] ?? null,
+    SalaryByYear:   [],
+  }));
+
+  // Fetch year-by-year contracts from ESPN core API for each player in parallel batches
+  for (let i = 0; i < basePlayers.length; i += 5) {
+    await Promise.all(basePlayers.slice(i, i + 5).map(async p => {
+      try {
+        const { data: cList } = await coreClient.get(
+          `/v2/sports/basketball/leagues/nba/athletes/${p.EspnId}/contracts?limit=20&lang=en&region=us`
+        );
+        // Fetch each year's contract in parallel
+        // Extract year from ref URL: .../contracts/2027?...
+        const refs = (cList.items ?? [])
+          .map(item => ({ ref: item['$ref'], year: parseInt(item['$ref']?.match(/contracts\/(\d{4})/)?.[1] ?? '0') }))
+          .filter(r => r.ref && r.year >= CURRENT_YEAR);
+
+        const yearData = await Promise.all(refs.map(({ ref, year }) =>
+          coreClient.get(ref.replace('http://', 'https://')).then(r => ({ year, data: r.data })).catch(() => null)
+        ));
+        p.SalaryByYear = yearData
+          .filter(d => d && d.data?.salary)
+          .map(d => ({
+            year:       d.year,
+            salary:     d.data.salary,
+            optionType: OPTION_LABELS[d.data.optionType] ?? null,
+          }))
+          .sort((a, b) => a.year - b.year);
+      } catch {}
+    }));
+  }
+
+  const players = basePlayers.sort((a, b) => b.Salary - a.Salary);
+  const totalSalary = players.reduce((s, p) => s + p.Salary, 0);
+  const result = { players, totalSalary, teamAbbr };
+  writeDisk(cacheKey, result, 86400);
+  return result;
 }
 
 export async function getTeamRoster(teamAbbr) {

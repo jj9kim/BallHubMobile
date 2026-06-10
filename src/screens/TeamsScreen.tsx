@@ -376,3 +376,4 @@ const d = StyleSheet.create({
   yearRowTitle:   { color: '#fff', fontSize: 15, fontWeight: '600' },
   yearRowChevron: { color: '#555', fontSize: 20, fontWeight: '300' },
 });
+

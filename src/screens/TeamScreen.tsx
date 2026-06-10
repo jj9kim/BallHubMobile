@@ -13,7 +13,20 @@ import { NBAService, Standing, Game, Player } from '../api/nbaService';
 import { teamLogoUri, teamColors } from '../utils/teamMappings';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'TeamProfile'>;
-type Tab = 'Overview' | 'Roster' | 'Matches' | 'Stats';
+type Tab = 'Overview' | 'Roster' | 'Matches' | 'Stats' | 'Contracts';
+
+const CAP_BY_YEAR: Record<number, { cap: number; tax: number; min: number; apron1: number; apron2: number }> = {
+  2026: { cap: 154_647_000, tax: 187_895_000, min: 139_182_000, apron1: 195_945_000, apron2: 207_824_000 },
+  2027: { cap: 165_000_000, tax: 201_000_000, min: 149_000_000, apron1: 209_000_000, apron2: 222_000_000 },
+};
+const DEFAULT_CAP = { cap: 154_647_000, tax: 187_895_000, min: 139_182_000, apron1: 195_945_000, apron2: 207_824_000 };
+
+function fmtSalary(n: number, full = false): string {
+  if (!n) return '—';
+  if (full) return `$${n.toLocaleString('en-US')}`;
+  if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(2)}M`;
+  return `$${(n / 1_000).toFixed(0)}K`;
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -41,15 +54,17 @@ function isGameScheduled(g: Game) { return g.Status === 'Scheduled'; }
 // ── Tab Bar ───────────────────────────────────────────────────────────────────
 
 function TabBar({ active, onChange }: { active: Tab; onChange: (t: Tab) => void }) {
-  const TABS: Tab[] = ['Overview', 'Roster', 'Matches', 'Stats'];
+  const TABS: Tab[] = ['Overview', 'Roster', 'Matches', 'Contracts', 'Stats'];
   return (
-    <View style={s.tabBar}>
-      {TABS.map(t => (
-        <TouchableOpacity key={t} style={s.tabBtn} onPress={() => onChange(t)}>
-          <Text style={[s.tabLabel, active === t && s.tabLabelActive]}>{t}</Text>
-          {active === t && <View style={s.tabUnderline} />}
-        </TouchableOpacity>
-      ))}
+    <View style={{ borderBottomWidth: 1, borderBottomColor: '#2a2a2a' }}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexDirection: 'row' }}>
+        {TABS.map(t => (
+          <TouchableOpacity key={t} style={s.tabBtn} onPress={() => onChange(t)}>
+            <Text style={[s.tabLabel, active === t && s.tabLabelActive]}>{t}</Text>
+            {active === t && <View style={s.tabUnderline} />}
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
     </View>
   );
 }
@@ -429,7 +444,7 @@ function PlayerRow({ player: p, teamKey, alt, nbaIdMap }: {
             </View>
           )}
         </View>
-        <Text style={{ color: '#fff', fontSize: 12, fontWeight: '600', flex: 1 }} numberOfLines={1}>{p.FirstName} {p.LastName}</Text>
+        <Text style={{ color: '#fff', fontSize: 12, fontWeight: '600', flex: 1 }} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{p.FirstName} {p.LastName}</Text>
       </View>
       <Text style={s.rosterCell}>{p.Position ?? '—'}</Text>
       <Text style={s.rosterCell}>{fmtHeight(p.Height)}</Text>
@@ -549,7 +564,273 @@ function MatchesTab({ teamKey }: { teamKey: string }) {
   );
 }
 
-// ── Stats Tab (placeholder) ───────────────────────────────────────────────────
+// ── Contracts Tab ─────────────────────────────────────────────────────────────
+
+const FULL_POSITION: Record<string, string> = {
+  PG: 'Point Guard', SG: 'Shooting Guard', SF: 'Small Forward',
+  PF: 'Power Forward', C: 'Center', G: 'Guard', F: 'Forward',
+  'G-F': 'Guard-Forward', 'F-C': 'Forward-Center', 'F-G': 'Forward-Guard',
+};
+
+const OPTION_SHORT: Record<string, string>  = { 'Player Option': 'PO', 'Team Option': 'TO', 'Two-Way': '2W' };
+const OPTION_COLOR: Record<string, string>  = { 'Player Option': '#60a5fa', 'Team Option': '#f59e0b', 'Two-Way': '#a78bfa' };
+
+const PHOTO_W = 28;
+const NAME_PADDING = 10 + 7; // paddingLeft + gap
+const YEAR_W  = 110;
+
+function SalaryCell({ entry, isEmpty, isTwoWay, isFirstYear, width }: { entry: any; isEmpty: boolean; isTwoWay: boolean; isFirstYear: boolean; width?: number }) {
+  const w = width ? { width } : {};
+  if (isEmpty) return <View style={[ct.cell, w]} />;
+  if (isTwoWay) {
+    if (!isFirstYear) return <View style={[ct.cell, w]} />;
+    return (
+      <View style={[ct.cell, w]}>
+        <View style={ct.twoBadge}><Text style={ct.twoText}>2-WAY</Text></View>
+      </View>
+    );
+  }
+  if (!entry) {
+    return (
+      <View style={[ct.cell, w]}>
+        <View style={ct.ufaBadge}><Text style={ct.ufaText}>UFA</Text></View>
+      </View>
+    );
+  }
+  const opt = entry.optionType;
+  return (
+    <View style={[ct.cell, w]}>
+      <Text style={ct.salary}>{fmtSalary(entry.salary)}</Text>
+      {opt && (
+        <Text style={[ct.optTag, { color: OPTION_COLOR[opt] ?? '#aaa' }]}>
+          {OPTION_SHORT[opt] ?? opt}
+        </Text>
+      )}
+    </View>
+  );
+}
+
+function CapBar({ year, total, caps, statusColor }: {
+  year: number; total: number;
+  caps: { cap: number; tax: number; min: number; apron1: number; apron2: number };
+  statusColor: string;
+}) {
+  const max    = caps.apron2 * 1.08;
+  const fillPct = Math.min(total / max * 100, 100);
+  const toPct   = (v: number) => `${Math.min(v / max * 100, 100)}%` as any;
+
+  const thresholds = [
+    { key: 'Min',         value: caps.min,    color: '#4ade80' },
+    { key: 'Cap',         value: caps.cap,    color: '#4ade80' },
+    { key: 'Luxury Tax',  value: caps.tax,    color: '#f59e0b' },
+    { key: '1st Apron',   value: caps.apron1, color: '#f97316' },
+    { key: '2nd Apron',   value: caps.apron2, color: '#ef4444' },
+  ];
+
+  const statusLabel = total > caps.apron2 ? 'Over 2nd Apron'
+    : total > caps.apron1 ? 'Over 1st Apron'
+    : total > caps.tax    ? 'Over Tax'
+    : total > caps.cap    ? 'Over Cap'
+    : 'Under Cap';
+
+  return (
+    <View style={{ paddingHorizontal: 14, paddingTop: 14, paddingBottom: 16 }}>
+      {/* Title row */}
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 }}>
+        <Text style={{ color: '#aaa', fontSize: 11, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+          {year - 1}-{String(year).slice(2)} Payroll
+        </Text>
+        <Text style={{ fontSize: 12, fontWeight: '700', color: statusColor }}>
+          {fmtSalary(total)}{'  ·  '}{statusLabel}
+        </Text>
+      </View>
+
+      {/* Bar + tick marks */}
+      <View style={{ height: 24, overflow: 'hidden' }}>
+        {/* Track */}
+        <View style={[ct.capBarBg, { position: 'absolute', left: 0, right: 0, top: 8 }]}>
+          <View style={[ct.capBarFill, { width: `${fillPct}%` as any, backgroundColor: statusColor }]} />
+        </View>
+
+        {/* Threshold ticks */}
+        {thresholds.map(({ key, value, color }) => (
+          <View key={key} style={{ position: 'absolute', left: toPct(value), top: 4, alignItems: 'center', width: 1, overflow: 'hidden' }}>
+            <View style={{ width: 3, height: 18, backgroundColor: color, opacity: 0.95 }} />
+          </View>
+        ))}
+      </View>
+
+      {/* Legend — 2 rows, 3 columns aligned */}
+      {[[0,1,2],[3,4,-1]].map((rowIdxs, ri) => (
+        <View key={ri} style={{ flexDirection: 'row', marginTop: 6 }}>
+          {rowIdxs.map((i, ci) => {
+            if (i === -1) return <View key={ci} style={{ flex: 1 }} />;
+            const { key, value, color } = thresholds[i];
+            return (
+              <View key={key} style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flex: 1 }}>
+                <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: color }} />
+                <Text style={{ color: '#555', fontSize: 10 }}>{key}  {fmtSalary(value)}</Text>
+              </View>
+            );
+          })}
+        </View>
+      ))}
+    </View>
+  );
+}
+
+function ContractPlayerRow({ player: p, alt, teamKey, nameFontSize, width, playerIdMap }: { player: any; alt: boolean; teamKey: string; nameFontSize: number; width: number; playerIdMap: Record<string, number> }) {
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const [failed, setFailed] = useState(false);
+  const uri = p.PhotoUrl ?? null;
+  const playerId = playerIdMap[(p.Name ?? '').toLowerCase()];
+
+  return (
+    <TouchableOpacity
+      style={[ct.nameRow, alt && { backgroundColor: '#191919' }, { width, flexDirection: 'row', alignItems: 'center', gap: 7 }]}
+      onPress={() => playerId && navigation.navigate('PlayerProfile', { playerId })}
+      activeOpacity={playerId ? 0.7 : 1}
+    >
+      <View style={{ width: 28, height: 28, borderRadius: 14, overflow: 'hidden', backgroundColor: '#2a2a2a', flexShrink: 0 }}>
+        {!failed && uri ? (
+          <Image source={{ uri }} style={{ width: '100%', height: '100%' }} resizeMode="cover" onError={() => setFailed(true)} />
+        ) : (
+          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: teamColors[teamKey] ?? '#333' }}>
+            <Text style={{ color: '#fff', fontSize: 8, fontWeight: '800' }}>{p.Name?.split(' ').pop()?.slice(0, 2)}</Text>
+          </View>
+        )}
+      </View>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text style={[ct.playerName, { fontSize: nameFontSize }]} numberOfLines={1}>{p.Name}</Text>
+        <Text style={ct.playerPos}>
+          {p.Jersey ? `#${p.Jersey}` : ''}
+          {p.Jersey && p.Position ? '  ·  ' : ''}
+          {FULL_POSITION[p.Position] ?? p.Position ?? ''}
+        </Text>
+      </View>
+    </TouchableOpacity>
+  );
+}
+
+function ContractsTab({ teamKey }: { teamKey: string }) {
+  const [salaries, setSalaries]         = useState<any[]>([]);
+  const [total, setTotal]               = useState(0);
+  const [loading, setLoading]           = useState(true);
+  const [selectedYear, setSelectedYear] = useState<number | null>(null);
+  const [playerIdMap, setPlayerIdMap]   = useState<Record<string, number>>({});
+
+  useEffect(() => {
+    Promise.all([
+      NBAService.getTeamSalaries(teamKey),
+      NBAService.getTeamRoster(teamKey),
+    ]).then(([salRes, rosterRes]) => {
+      setSalaries(salRes.players ?? []);
+      setTotal(salRes.totalSalary ?? 0);
+      const map: Record<string, number> = {};
+      (rosterRes.players ?? []).forEach((p: Player) => {
+        map[`${p.FirstName} ${p.LastName}`.toLowerCase()] = p.PlayerID;
+      });
+      setPlayerIdMap(map);
+    }).catch(() => {}).finally(() => setLoading(false));
+  }, [teamKey]);
+
+  const currentYear = new Date().getFullYear();
+  const years = Array.from(new Set(
+    salaries.flatMap(p => (p.SalaryByYear ?? []).map((y: any) => y.year))
+  )).sort((a, b) => a - b);
+  const displayYears = years.length > 0 ? years : [currentYear];
+
+  const longestName = salaries.reduce((max, p) => Math.max(max, (p.Name ?? '').length), 0);
+  const nameFontSize = longestName > 20 ? 10 : longestName > 15 ? 11 : 12;
+  const charWidth    = nameFontSize === 12 ? 7.2 : nameFontSize === 11 ? 6.6 : 6.1;
+  const nameColW     = Math.ceil(longestName * charWidth) + PHOTO_W + NAME_PADDING + 4;
+
+
+  const yearTotals: Record<number, number> = {};
+  displayYears.forEach(y => {
+    yearTotals[y] = salaries.reduce((sum, p) => {
+      const entry = (p.SalaryByYear ?? []).find((s: any) => s.year === y);
+      return sum + (entry?.salary ?? 0);
+    }, 0);
+  });
+
+  const activeYear  = selectedYear ?? displayYears[0];
+  const sortedSalaries = [...salaries].sort((a, b) => {
+    const aEntry = (a.SalaryByYear ?? []).find((s: any) => s.year === activeYear);
+    const bEntry = (b.SalaryByYear ?? []).find((s: any) => s.year === activeYear);
+    return (bEntry?.salary ?? 0) - (aEntry?.salary ?? 0);
+  });
+  const activeTotal = yearTotals[activeYear] ?? 0;
+  const caps        = CAP_BY_YEAR[activeYear] ?? DEFAULT_CAP;
+  const statusColor = activeTotal > caps.apron2 ? '#ef4444' : activeTotal > caps.apron1 ? '#f97316' : activeTotal > caps.tax ? '#f59e0b' : activeTotal > caps.cap ? '#facc15' : '#4ade80';
+
+  if (loading) return <ActivityIndicator color="#fff" style={{ marginTop: 40 }} />;
+
+  return (
+    <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
+
+      {/* ── Cap bar (updates with selected year) ── */}
+      <CapBar year={activeYear} total={activeTotal} caps={caps} statusColor={statusColor} />
+
+      {/* ── Table (fixed name col + scrollable year cols) ── */}
+      <View style={{ flexDirection: 'row' }}>
+
+        {/* Fixed left: player names */}
+        <View style={{ width: nameColW, borderRightWidth: 1, borderRightColor: '#2a2a2a' }}>
+          <View style={[ct.headerRow, { paddingLeft: 14 }]}>
+            <Text style={ct.headerText}>PLAYER</Text>
+          </View>
+          {sortedSalaries.map((p, i) => (
+            <ContractPlayerRow key={p.EspnId ?? i} player={p} alt={i % 2 === 1} teamKey={teamKey} nameFontSize={nameFontSize} width={nameColW} playerIdMap={playerIdMap} />
+          ))}
+        </View>
+
+        {/* Scrollable right: year columns */}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flex: 1 }}>
+          <View>
+            <View style={[ct.headerRow, { flexDirection: 'row' }]}>
+              {displayYears.map(y => {
+                const isActive = y === activeYear;
+                return (
+                  <TouchableOpacity
+                    key={y}
+                    style={[ct.yearHeader, { width: YEAR_W }, isActive && ct.yearHeaderActive]}
+                    onPress={() => setSelectedYear(y)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[ct.headerText, isActive && ct.headerTextActive]}>
+                      {y - 1}-{String(y).slice(2)}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            {sortedSalaries.map((p, i) => {
+              const isTwoWay  = p.Salary === 0 && (p.SalaryByYear ?? []).length === 0;
+              const salaryMap = new Map((p.SalaryByYear ?? []).map((s: any) => [s.year, s]));
+              const lastYear  = Math.max(...(p.SalaryByYear ?? []).map((s: any) => s.year), 0);
+              return (
+                <View key={p.EspnId ?? i} style={[{ flexDirection: 'row' }, i % 2 === 1 && { backgroundColor: '#191919' }]}>
+                  {displayYears.map((y, yi) => (
+                    <SalaryCell
+                      key={y}
+                      entry={salaryMap.get(y)}
+                      isEmpty={!isTwoWay && lastYear > 0 && y > lastYear}
+                      isTwoWay={isTwoWay}
+                      isFirstYear={yi === 0}
+                      width={YEAR_W}
+                    />
+                  ))}
+                </View>
+              );
+            })}
+          </View>
+        </ScrollView>
+      </View>
+
+    </ScrollView>
+  );
+}
 
 function StatsTab() {
   return (
@@ -596,10 +877,11 @@ export default function TeamScreen({ route }: Props) {
         <ActivityIndicator color="#fff" style={{ marginTop: 40 }} />
       ) : (
         <View style={{ flex: 1 }}>
-          {activeTab === 'Overview' && <OverviewTab teamKey={teamKey} standing={standing} allStandings={standings} />}
-          {activeTab === 'Roster'   && <RosterTab   teamKey={teamKey} />}
-          {activeTab === 'Matches'  && <MatchesTab  teamKey={teamKey} />}
-          {activeTab === 'Stats'    && <StatsTab />}
+          {activeTab === 'Overview'   && <OverviewTab teamKey={teamKey} standing={standing} allStandings={standings} />}
+          {activeTab === 'Roster'     && <RosterTab   teamKey={teamKey} />}
+          {activeTab === 'Matches'    && <MatchesTab  teamKey={teamKey} />}
+          {activeTab === 'Contracts'  && <ContractsTab teamKey={teamKey} />}
+          {activeTab === 'Stats'      && <StatsTab />}
         </View>
       )}
     </SafeAreaView>
@@ -617,7 +899,7 @@ const s = StyleSheet.create({
   teamRecord:     { color: '#aaa', fontSize: 13, marginTop: 4 },
 
   tabBar:         { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: '#2a2a2a' },
-  tabBtn:         { flex: 1, alignItems: 'center', paddingVertical: 12 },
+  tabBtn:         { alignItems: 'center', paddingVertical: 12, paddingHorizontal: 16 },
   tabLabel:       { color: '#555', fontSize: 13, fontWeight: '600' },
   tabLabelActive: { color: '#fff' },
   tabUnderline:   { position: 'absolute', bottom: 0, left: '20%', right: '20%', height: 2, backgroundColor: '#fff', borderRadius: 1 },
@@ -678,4 +960,40 @@ const s = StyleSheet.create({
 
   winner:         { color: '#4caf50' },
   loser:          { color: '#e05a5a' },
+});
+
+const ct = StyleSheet.create({
+  // cap bar
+  capBarBg:    { height: 5, backgroundColor: '#2a2a2a', borderRadius: 3, overflow: 'hidden' },
+  capBarFill:  { height: '100%', borderRadius: 3 },
+  capLabel:    { color: '#555', fontSize: 10, fontWeight: '500' },
+
+  // header row
+  headerRow:   { height: 36, justifyContent: 'center', borderBottomWidth: 1, borderBottomColor: '#2a2a2a' },
+  headerText:  { color: '#555', fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.4 },
+  yearHeader:       { alignItems: 'center', justifyContent: 'center' },
+  yearHeaderActive: { borderBottomWidth: 2, borderBottomColor: '#fff' },
+  headerTextActive: { color: '#fff' },
+
+  // name column rows
+  nameRow:     { height: 52, paddingLeft: 10, paddingRight: 6,
+                 borderBottomWidth: 1, borderBottomColor: '#1e1e1e' },
+  playerName:  { color: '#fff', fontSize: 10, fontWeight: '700' },
+  playerPos:   { color: '#555', fontSize: 10, fontWeight: '600', marginTop: 2 },
+
+  // salary cells
+  cell:        { height: 52, alignItems: 'center', justifyContent: 'center',
+                 borderBottomWidth: 1, borderBottomColor: '#1e1e1e' },
+  salary:      { color: '#fff', fontSize: 12, fontWeight: '700' },
+  optTag:      { fontSize: 9, fontWeight: '700', marginTop: 3, textTransform: 'uppercase', letterSpacing: 0.3 },
+
+  // UFA badge
+  ufaBadge:    { backgroundColor: '#2a1a1a', borderWidth: 1, borderColor: '#5a2a2a',
+                 borderRadius: 5, paddingHorizontal: 8, paddingVertical: 3 },
+  ufaText:     { color: '#e05a5a', fontSize: 10, fontWeight: '700', letterSpacing: 0.3 },
+
+  // 2-WAY badge
+  twoBadge:    { backgroundColor: '#1a1a2a', borderWidth: 1, borderColor: '#3a3a6a',
+                 borderRadius: 5, paddingHorizontal: 6, paddingVertical: 3 },
+  twoText:     { color: '#a78bfa', fontSize: 10, fontWeight: '700', letterSpacing: 0.3 },
 });

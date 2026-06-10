@@ -198,6 +198,9 @@ export const NBAService = {
   getDraftClass: (year: number) =>
     apiFetch<{ picks: any[] }>(`/api/teams/draft/${year}`),
 
+  getTeamSalaries: (team: string) =>
+    apiFetch<{ players: any[]; totalSalary: number }>(`/api/teams/${team}/salaries`),
+
   // Helpers
   formatDate: (dateStr: string): string => {
     const d = new Date(dateStr);
