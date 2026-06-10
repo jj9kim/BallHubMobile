@@ -920,15 +920,20 @@ function DraftTab({ teamKey }: { teamKey: string }) {
   });
   const years = Object.keys(byYear).map(Number).sort((a, b) => b - a);
 
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+
   return (
     <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
       {years.map(year => (
         <View key={year} style={{ marginTop: 16 }}>
-          {/* Year header */}
-          <View style={dt.yearHeader}>
+          {/* Year header — tappable to full draft page */}
+          <TouchableOpacity style={dt.yearHeader} onPress={() => navigation.navigate('Draft', { year })} activeOpacity={0.7}>
             <Text style={dt.yearText}>{year} Draft</Text>
-            <Text style={dt.yearCount}>{byYear[year].length} pick{byYear[year].length !== 1 ? 's' : ''}</Text>
-          </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Text style={dt.yearCount}>{byYear[year].length} pick{byYear[year].length !== 1 ? 's' : ''}</Text>
+              <Text style={{ color: '#555', fontSize: 12 }}>›</Text>
+            </View>
+          </TouchableOpacity>
           {/* Column headers */}
           <View style={[dt.row, { borderBottomWidth: 1, borderBottomColor: '#2a2a2a', paddingVertical: 6 }]}>
             <View style={dt.pickBadge}><Text style={dt.colHeader}>#</Text></View>
