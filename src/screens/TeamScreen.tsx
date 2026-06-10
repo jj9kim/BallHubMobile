@@ -683,7 +683,8 @@ function ContractPlayerRow({ player: p, alt, teamKey, nameFontSize, width, playe
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [failed, setFailed] = useState(false);
   const uri = p.PhotoUrl ?? null;
-  const playerId = playerIdMap[(p.Name ?? '').toLowerCase()];
+  const normalize = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  const playerId = playerIdMap[normalize(p.Name ?? '')];
 
   return (
     <TouchableOpacity
@@ -726,9 +727,11 @@ function ContractsTab({ teamKey }: { teamKey: string }) {
     ]).then(([salRes, rosterRes]) => {
       setSalaries(salRes.players ?? []);
       setTotal(salRes.totalSalary ?? 0);
+      const normalize = (s: string) =>
+        s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
       const map: Record<string, number> = {};
       (rosterRes.players ?? []).forEach((p: Player) => {
-        map[`${p.FirstName} ${p.LastName}`.toLowerCase()] = p.PlayerID;
+        map[normalize(`${p.FirstName} ${p.LastName}`)] = p.PlayerID;
       });
       setPlayerIdMap(map);
     }).catch(() => {}).finally(() => setLoading(false));
