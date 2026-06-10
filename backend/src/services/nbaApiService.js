@@ -196,6 +196,7 @@ function mapGameStatus(statusId, statusText) {
 // ESPN team abbreviation → app abbreviation
 const ESPN_TO_APP = {
   NYK: 'NY', SAS: 'SA', PHX: 'PHO', GSW: 'GS',
+  UTAH: 'UTA', WSH: 'WAS',
 };
 function espnToApp(abbr) { return ESPN_TO_APP[abbr] ?? abbr ?? ''; }
 
