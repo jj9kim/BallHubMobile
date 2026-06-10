@@ -901,6 +901,7 @@ function DraftPickRow({ pick, i }: { pick: any; i: number }) {
 function DraftTab({ teamKey }: { teamKey: string }) {
   const [picks, setPicks]   = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
   useEffect(() => {
     NBAService.getTeamDraftPicks(teamKey)
@@ -919,8 +920,6 @@ function DraftTab({ teamKey }: { teamKey: string }) {
     byYear[p.DraftYear].push(p);
   });
   const years = Object.keys(byYear).map(Number).sort((a, b) => b - a);
-
-  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
   return (
     <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
