@@ -65,4 +65,26 @@ router.get('/draft/:year', async (req, res) => {
   }
 });
 
+// GET /api/teams/:team/draftpicks  — all picks by a team across all draft years
+router.get('/:team/draftpicks', async (req, res) => {
+  try {
+    const teamAbbr = req.params.team.toUpperCase();
+    const START_YEAR = 2001;
+    const currentYear = new Date().getFullYear();
+    const years = Array.from({ length: currentYear - START_YEAR + 1 }, (_, i) => START_YEAR + i);
+
+    const picksWithYear = (await Promise.all(
+      years.map(async y => {
+        const picks = await getDraftClass(y).catch(() => []);
+        return picks.filter(p => p.Team === teamAbbr).map(p => ({ ...p, DraftYear: y }));
+      })
+    )).flat();
+
+    picksWithYear.sort((a, b) => b.DraftYear - a.DraftYear || a.Overall - b.Overall);
+    res.json({ success: true, picks: picksWithYear, count: picksWithYear.length });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 export default router;

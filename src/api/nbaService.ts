@@ -201,6 +201,9 @@ export const NBAService = {
   getTeamSalaries: (team: string) =>
     apiFetch<{ players: any[]; totalSalary: number }>(`/api/teams/${team}/salaries`),
 
+  getTeamDraftPicks: (team: string) =>
+    apiFetch<{ picks: any[] }>(`/api/teams/${team}/draftpicks`),
+
   // Helpers
   formatDate: (dateStr: string): string => {
     const d = new Date(dateStr);

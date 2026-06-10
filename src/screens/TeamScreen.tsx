@@ -13,7 +13,7 @@ import { NBAService, Standing, Game, Player } from '../api/nbaService';
 import { teamLogoUri, teamColors } from '../utils/teamMappings';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'TeamProfile'>;
-type Tab = 'Overview' | 'Roster' | 'Matches' | 'Stats' | 'Contracts';
+type Tab = 'Overview' | 'Roster' | 'Matches' | 'Stats' | 'Contracts' | 'Draft';
 
 const CAP_BY_YEAR: Record<number, { cap: number; tax: number; min: number; apron1: number; apron2: number }> = {
   2026: { cap: 154_647_000, tax: 187_895_000, min: 139_182_000, apron1: 195_945_000, apron2: 207_824_000 },
@@ -54,7 +54,7 @@ function isGameScheduled(g: Game) { return g.Status === 'Scheduled'; }
 // ── Tab Bar ───────────────────────────────────────────────────────────────────
 
 function TabBar({ active, onChange }: { active: Tab; onChange: (t: Tab) => void }) {
-  const TABS: Tab[] = ['Overview', 'Roster', 'Matches', 'Contracts', 'Stats'];
+  const TABS: Tab[] = ['Overview', 'Roster', 'Matches', 'Stats', 'Contracts', 'Draft'];
   return (
     <View style={{ borderBottomWidth: 1, borderBottomColor: '#2a2a2a' }}>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexDirection: 'row' }}>
@@ -835,6 +835,118 @@ function ContractsTab({ teamKey }: { teamKey: string }) {
   );
 }
 
+// ── Draft Tab ─────────────────────────────────────────────────────────────────
+
+function DraftPickRow({ pick, i }: { pick: any; i: number }) {
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const [failed, setFailed] = useState(false);
+  const uri = pick.PhotoUrl ?? null;
+  const canNav = !!pick.NbaId;
+
+  return (
+    <TouchableOpacity
+      style={[dt.row, i % 2 === 1 && { backgroundColor: '#191919' }]}
+      onPress={() => canNav && navigation.navigate('PlayerProfile', { playerId: pick.NbaId })}
+      activeOpacity={canNav ? 0.7 : 1}
+    >
+      {/* Pick number */}
+      <View style={dt.pickBadge}>
+        <Text style={dt.pickNum}>{pick.Overall}</Text>
+      </View>
+
+      {/* Photo */}
+      <View style={{ width: 38, height: 38, borderRadius: 19, overflow: 'hidden', backgroundColor: '#2a2a2a', flexShrink: 0 }}>
+        {!failed && uri ? (
+          <Image source={{ uri }} style={{ width: '100%', height: '100%' }} resizeMode="cover" onError={() => setFailed(true)} />
+        ) : (
+          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#333' }}>
+            <Text style={{ color: '#fff', fontSize: 10, fontWeight: '800' }}>{pick.Name?.split(' ').pop()?.slice(0, 2)}</Text>
+          </View>
+        )}
+      </View>
+
+      {/* Name + meta */}
+      <View style={{ flex: 1, marginLeft: 10, minWidth: 0 }}>
+        <Text style={dt.name} numberOfLines={1}>{pick.Name}</Text>
+        <Text style={dt.meta}>
+          {pick.Position ?? ''}
+          {pick.Position && pick.College ? '  ·  ' : ''}
+          {pick.College ?? ''}
+        </Text>
+      </View>
+
+      {/* Stats */}
+      {pick.Stats?.GP > 0 && (
+        <View style={dt.statsCol}>
+          <Text style={dt.statVal}>{pick.Stats.PTS?.toFixed(1)}</Text>
+          <Text style={dt.statLbl}>PTS</Text>
+        </View>
+      )}
+      {pick.Stats?.GP > 0 && (
+        <View style={dt.statsCol}>
+          <Text style={dt.statVal}>{pick.Stats.REB?.toFixed(1)}</Text>
+          <Text style={dt.statLbl}>REB</Text>
+        </View>
+      )}
+      {pick.Stats?.GP > 0 && (
+        <View style={dt.statsCol}>
+          <Text style={dt.statVal}>{pick.Stats.AST?.toFixed(1)}</Text>
+          <Text style={dt.statLbl}>AST</Text>
+        </View>
+      )}
+    </TouchableOpacity>
+  );
+}
+
+function DraftTab({ teamKey }: { teamKey: string }) {
+  const [picks, setPicks]   = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    NBAService.getTeamDraftPicks(teamKey)
+      .then(res => setPicks(res.picks ?? []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [teamKey]);
+
+  if (loading) return <ActivityIndicator color="#fff" style={{ marginTop: 40 }} />;
+  if (!picks.length) return <Text style={[s.emptyText, { textAlign: 'center', marginTop: 40 }]}>No draft data</Text>;
+
+  // Group by year
+  const byYear: Record<number, any[]> = {};
+  picks.forEach(p => {
+    if (!byYear[p.DraftYear]) byYear[p.DraftYear] = [];
+    byYear[p.DraftYear].push(p);
+  });
+  const years = Object.keys(byYear).map(Number).sort((a, b) => b - a);
+
+  return (
+    <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
+      {years.map(year => (
+        <View key={year} style={{ marginTop: 16 }}>
+          {/* Year header */}
+          <View style={dt.yearHeader}>
+            <Text style={dt.yearText}>{year} Draft</Text>
+            <Text style={dt.yearCount}>{byYear[year].length} pick{byYear[year].length !== 1 ? 's' : ''}</Text>
+          </View>
+          {/* Column headers */}
+          <View style={[dt.row, { borderBottomWidth: 1, borderBottomColor: '#2a2a2a', paddingVertical: 6 }]}>
+            <View style={dt.pickBadge}><Text style={dt.colHeader}>#</Text></View>
+            <View style={{ width: 38 }} />
+            <Text style={[dt.colHeader, { flex: 1, marginLeft: 10 }]}>Player</Text>
+            <Text style={[dt.colHeader, { width: 36, textAlign: 'center' }]}>PTS</Text>
+            <Text style={[dt.colHeader, { width: 36, textAlign: 'center' }]}>REB</Text>
+            <Text style={[dt.colHeader, { width: 36, textAlign: 'center' }]}>AST</Text>
+          </View>
+          {byYear[year].map((pick, i) => (
+            <DraftPickRow key={pick.Overall} pick={pick} i={i} />
+          ))}
+        </View>
+      ))}
+    </ScrollView>
+  );
+}
+
 function StatsTab() {
   return (
     <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
@@ -883,8 +995,9 @@ export default function TeamScreen({ route }: Props) {
           {activeTab === 'Overview'   && <OverviewTab teamKey={teamKey} standing={standing} allStandings={standings} />}
           {activeTab === 'Roster'     && <RosterTab   teamKey={teamKey} />}
           {activeTab === 'Matches'    && <MatchesTab  teamKey={teamKey} />}
-          {activeTab === 'Contracts'  && <ContractsTab teamKey={teamKey} />}
           {activeTab === 'Stats'      && <StatsTab />}
+          {activeTab === 'Contracts'  && <ContractsTab teamKey={teamKey} />}
+          {activeTab === 'Draft'      && <DraftTab    teamKey={teamKey} />}
         </View>
       )}
     </SafeAreaView>
@@ -999,4 +1112,23 @@ const ct = StyleSheet.create({
   twoBadge:    { backgroundColor: '#1a1a2a', borderWidth: 1, borderColor: '#3a3a6a',
                  borderRadius: 5, paddingHorizontal: 6, paddingVertical: 3 },
   twoText:     { color: '#a78bfa', fontSize: 10, fontWeight: '700', letterSpacing: 0.3 },
+});
+
+const dt = StyleSheet.create({
+  yearHeader:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+                 paddingHorizontal: 16, paddingVertical: 10 },
+  yearText:    { color: '#fff', fontSize: 14, fontWeight: '700' },
+  yearCount:   { color: '#555', fontSize: 12 },
+  colHeader:   { color: '#555', fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.4 },
+
+  row:         { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10 },
+  pickBadge:   { width: 30, alignItems: 'center' },
+  pickNum:     { color: '#555', fontSize: 12, fontWeight: '700' },
+
+  name:        { color: '#fff', fontSize: 13, fontWeight: '600' },
+  meta:        { color: '#555', fontSize: 10, fontWeight: '500', marginTop: 2 },
+
+  statsCol:    { width: 36, alignItems: 'center' },
+  statVal:     { color: '#fff', fontSize: 12, fontWeight: '700' },
+  statLbl:     { color: '#555', fontSize: 9, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.3, marginTop: 1 },
 });
