@@ -927,7 +927,7 @@ function DraftTab({ teamKey }: { teamKey: string }) {
         <View key={year} style={{ marginTop: 16 }}>
           {/* Year header — tappable to full draft page */}
           <TouchableOpacity style={dt.yearHeader} onPress={() => navigation.navigate('Draft', { year })} activeOpacity={0.7}>
-            <Text style={dt.yearText}>{year} Draft</Text>
+            <Text style={dt.yearText}>{year} NBA Entry Draft</Text>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
               <Text style={dt.yearCount}>{byYear[year].length} pick{byYear[year].length !== 1 ? 's' : ''}</Text>
               <Text style={{ color: '#555', fontSize: 12 }}>›</Text>
