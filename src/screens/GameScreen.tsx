@@ -692,7 +692,7 @@ function StatsTab({ players, homeTeam, awayTeam }: { players: any[]; homeTeam: s
 // ── Main Screen ───────────────────────────────────────────────────────────────
 
 export default function GameScreen({ route, navigation }: Props) {
-  const { gameId, gameDate } = route.params;
+  const { gameId, gameDate, awayTeam, homeTeam } = route.params;
   const [boxscore, setBoxscore]   = useState<any>(null);
   const [loading, setLoading]     = useState(true);
   const [error, setError]         = useState<string | null>(null);
@@ -707,7 +707,7 @@ export default function GameScreen({ route, navigation }: Props) {
   }
 
   useEffect(() => {
-    NBAService.getBoxScore(gameId, gameDate)
+    NBAService.getBoxScore(gameId, gameDate, awayTeam, homeTeam)
       .then(res => { setBoxscore(res.boxscore); setLoading(false); })
       .catch(e => { setError(e.message); setLoading(false); });
   }, [gameId]);

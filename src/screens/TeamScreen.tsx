@@ -248,7 +248,7 @@ function OverviewTab({ teamKey, standing, allStandings }: {
                 <TouchableOpacity
                   key={g.GameID}
                   style={{ alignItems: 'center', gap: 7 }}
-                  onPress={() => navigation.navigate('Game', { gameId: g.GameID, gameDate: g.Day ?? '' })}
+                  onPress={() => navigation.navigate('Game', { gameId: g.GameID, gameDate: g.Day ?? '', awayTeam: g.AwayTeam, homeTeam: g.HomeTeam })}
                   activeOpacity={0.7}
                 >
                   <TeamLogo abbrev={opp} size={32} />

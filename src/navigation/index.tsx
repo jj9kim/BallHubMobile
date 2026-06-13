@@ -15,7 +15,7 @@ import DraftScreen from '../screens/DraftScreen';
 
 export type RootStackParamList = {
   MainTabs: undefined;
-  Game: { gameId: number; gameDate: string };
+  Game: { gameId: number; gameDate: string; awayTeam?: string; homeTeam?: string };
   TeamProfile: { teamKey: string; teamCity: string; teamName: string };
   PlayerProfile: { playerId: number; fallback?: { name: string; team: string; position: string; photoUrl: string } };
   Draft: { year: number };
