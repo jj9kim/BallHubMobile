@@ -186,6 +186,7 @@ function computeSeasonStats(games: Game[], teamKey: string) {
 function OverviewTab({ teamKey, standing, allStandings }: {
   teamKey: string; standing: Standing | null; allStandings: Standing[];
 }) {
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [schedule, setSchedule]       = useState<Game[]>([]);
   const [starters, setStarters]       = useState<any[]>([]);
   const [nbaIdMap, setNbaIdMap]       = useState<Record<number,number>>({});
@@ -244,13 +245,18 @@ function OverviewTab({ teamKey, standing, allStandings }: {
               const won      = myScore > oppScore;
               const opp      = isHome ? g.AwayTeam : g.HomeTeam;
               return (
-                <View key={g.GameID} style={{ alignItems: 'center', gap: 7 }}>
+                <TouchableOpacity
+                  key={g.GameID}
+                  style={{ alignItems: 'center', gap: 7 }}
+                  onPress={() => navigation.navigate('Game', { gameId: g.GameID, gameDate: g.Day ?? '' })}
+                  activeOpacity={0.7}
+                >
                   <TeamLogo abbrev={opp} size={32} />
                   <View style={[s.wlDot, { backgroundColor: won ? '#1a3a1a' : '#3a1a1a', borderColor: won ? '#4caf50' : '#e05a5a' }]}>
                     <Text style={[{ fontSize: 10, fontWeight: '800' }, won ? s.winnerText : s.loserText]}>{won ? 'W' : 'L'}</Text>
                   </View>
                   <Text style={s.formScore}>{myScore}–{oppScore}</Text>
-                </View>
+                </TouchableOpacity>
               );
             })}
           </View>
