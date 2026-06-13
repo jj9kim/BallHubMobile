@@ -58,7 +58,7 @@ const ESPN_TEAM_IDS = {
 };
 
 // Legacy ESPN abbreviations that exist in cached draft data
-export const ESPN_TEAM_ALIASES = { NOP: ['NOP','NO'], UTA: ['UTA','UTAH'], WAS: ['WAS','WSH'] };
+export const ESPN_TEAM_ALIASES = { NOP: ['NOP','NO'], UTA: ['UTA','UTAH'], WAS: ['WAS','WSH'], GSW: ['GSW','GS'] };
 
 // ── Cache helpers ─────────────────────────────────────────────────────────────
 
