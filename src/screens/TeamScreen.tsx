@@ -182,6 +182,7 @@ function OverviewTab({ teamKey, standing, allStandings }: {
   const [nbaIdMap, setNbaIdMap]       = useState<Record<number,number>>({});
   const [loading, setLoading]         = useState(true);
   const [statsOrLineup, setStatsOrLineup] = useState<'stats' | 'lineup'>('stats');
+  const [statsView, setStatsView]         = useState<'regular' | 'playoffs'>('regular');
 
   useEffect(() => {
     NBAService.getTeamSchedule(teamKey)
@@ -206,7 +207,10 @@ function OverviewTab({ teamKey, standing, allStandings }: {
   const last5  = schedule.filter(isGameFinal).slice(-5);
   const next   = schedule.find(g => !isGameFinal(g) && g.Status !== 'InProgress' && g.Status !== 'NotNecessary');
   const sorted = [...allStandings].sort((a, b) => b.Percentage - a.Percentage);
-  const seasonStats = computeSeasonStats(schedule, teamKey);
+  const regGames      = schedule.filter(g => g.SeasonType === 1);
+  const playoffGames  = schedule.filter(g => g.SeasonType === 3);
+  const seasonStats   = computeSeasonStats(regGames, teamKey);
+  const playoffStats  = computeSeasonStats(playoffGames, teamKey);
 
   return (
     <ScrollView contentContainerStyle={{ paddingHorizontal: 12, paddingTop: 12, paddingBottom: 40, gap: 10 }}>
@@ -300,38 +304,60 @@ function OverviewTab({ teamKey, standing, allStandings }: {
         {statsOrLineup === 'stats' ? (
           loading ? (
             <ActivityIndicator color="#fff" style={{ marginVertical: 24 }} />
-          ) : seasonStats ? (
-            <View style={{ marginTop: 14 }}>
-              {[
-                [{ val: seasonStats.ppg, label: 'PPG' }, { val: seasonStats.oppPpg, label: 'OPP PPG' }, { val: String(seasonStats.gp), label: 'GP' }],
-                [{ val: seasonStats.homeRec, label: 'Home' }, { val: seasonStats.awayRec, label: 'Away' }, { val: standing ? standing.Percentage.toFixed(3) : '—', label: 'Win%' }],
-              ].map((row, ri) => (
-                <View key={ri}>
-                  {ri > 0 && <View style={s.divider} />}
-                  <View style={{ flexDirection: 'row', paddingVertical: 12 }}>
-                    {row.map(({ val, label }, ci) => (
-                      <View key={label} style={[{ flex: 1, alignItems: 'center' }, ci > 0 && { borderLeftWidth: 1, borderLeftColor: '#2a2a2a' }]}>
-                        <Text style={s.statNum}>{val}</Text>
-                        <Text style={s.statLabel}>{label}</Text>
+          ) : (
+            <>
+              {/* Regular / Playoffs toggle */}
+              {playoffStats && (
+                <View style={[s.segRow, { marginTop: 12, gap: 6 }]}>
+                  {(['regular', 'playoffs'] as const).map(v => (
+                    <TouchableOpacity
+                      key={v}
+                      style={[s.segChip, { paddingHorizontal: 10, paddingVertical: 5 }, statsView === v && s.segChipActive]}
+                      onPress={() => setStatsView(v)}
+                    >
+                      <Text style={[s.segChipText, { fontSize: 11 }, statsView === v && s.segChipTextActive]}>
+                        {v === 'regular' ? 'Regular Season' : 'Playoffs'}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+              {(() => {
+                const st = statsView === 'playoffs' ? playoffStats : seasonStats;
+                if (!st) return <Text style={[s.emptyText, { marginTop: 16 }]}>No stats available</Text>;
+                return (
+                  <View style={{ marginTop: 14 }}>
+                    {[
+                      [{ val: st.ppg, label: 'PPG' }, { val: st.oppPpg, label: 'OPP PPG' }, { val: String(st.gp), label: 'GP' }],
+                      [{ val: st.homeRec, label: 'Home' }, { val: st.awayRec, label: 'Away' }, { val: statsView === 'regular' && standing ? standing.Percentage.toFixed(3) : (st.gp > 0 ? ((parseInt(st.homeRec.split('-')[0]) + parseInt(st.awayRec.split('-')[0])) / st.gp).toFixed(3) : '—'), label: 'Win%' }],
+                    ].map((row, ri) => (
+                      <View key={ri}>
+                        {ri > 0 && <View style={s.divider} />}
+                        <View style={{ flexDirection: 'row', paddingVertical: 12 }}>
+                          {row.map(({ val, label }, ci) => (
+                            <View key={label} style={[{ flex: 1, alignItems: 'center' }, ci > 0 && { borderLeftWidth: 1, borderLeftColor: '#2a2a2a' }]}>
+                              <Text style={s.statNum}>{val}</Text>
+                              <Text style={s.statLabel}>{label}</Text>
+                            </View>
+                          ))}
+                        </View>
                       </View>
                     ))}
+                    {statsView === 'regular' && standing?.StreakDescription && (
+                      <>
+                        <View style={s.divider} />
+                        <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 10, gap: 8 }}>
+                          <Text style={s.statLabel}>Streak</Text>
+                          <Text style={[s.statNum, { fontSize: 15 }, standing.StreakDescription.startsWith('W') ? s.winnerText : s.loserText]}>
+                            {standing.StreakDescription}
+                          </Text>
+                        </View>
+                      </>
+                    )}
                   </View>
-                </View>
-              ))}
-              {standing?.StreakDescription && (
-                <>
-                  <View style={s.divider} />
-                  <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 10, gap: 8 }}>
-                    <Text style={s.statLabel}>Streak</Text>
-                    <Text style={[s.statNum, { fontSize: 15 }, standing.StreakDescription.startsWith('W') ? s.winnerText : s.loserText]}>
-                      {standing.StreakDescription}
-                    </Text>
-                  </View>
-                </>
-              )}
-            </View>
-          ) : (
-            <Text style={[s.emptyText, { marginTop: 16 }]}>No stats available</Text>
+                );
+              })()}
+            </>
           )
         ) : (
           loading ? (
