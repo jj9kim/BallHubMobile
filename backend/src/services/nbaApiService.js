@@ -733,7 +733,7 @@ export async function getTeamSchedule(season, teamAbbr) {
       const oppAbbr  = oppMatch ? toAppAbbr(oppMatch[1]) : '';
       const wl       = row.WL;
       const myScore  = row.PTS;
-      const oppScore = wl === 'W' ? (myScore - (row.PLUS_MINUS ?? 0)) : (myScore + (row.PLUS_MINUS ?? 0));
+      const oppScore = myScore - (row.PLUS_MINUS ?? 0); // PLUS_MINUS signed: +10=won by 10, -10=lost by 10
       return {
         GameID: parseInt(row.GAME_ID), _nbaId: row.GAME_ID,
         Season: season, SeasonType: 1,
