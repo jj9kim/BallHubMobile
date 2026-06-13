@@ -170,7 +170,7 @@ router.get('/:id', async (req, res) => {
 // GET /api/games/:id/boxscore
 router.get('/:id/boxscore', async (req, res) => {
   try {
-    const boxscore = await getBoxScore(req.params.id);
+    const boxscore = await getBoxScore(req.params.id, req.query.date ?? null, req.query.away ?? null, req.query.home ?? null);
     if (boxscore?.Game?.SeasonType === 3) {
       // Use date from query param if backend has no date (NBA.com boxscore doesn't include it)
       if (req.query.date && !boxscore.Game.Day) boxscore.Game.Day = req.query.date;

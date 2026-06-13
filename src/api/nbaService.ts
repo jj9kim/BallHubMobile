@@ -151,8 +151,10 @@ export const NBAService = {
   getGameById: (id: number) =>
     apiFetch<{ game: Game }>(`/api/games/${id}`),
 
-  getBoxScore: (id: number, date?: string) =>
-    apiFetch<{ boxscore: BoxScore }>(`/api/games/${id}/boxscore${date ? `?date=${date}` : ''}`),
+  getBoxScore: (id: number, date?: string, away?: string, home?: string) => {
+    const params = [date && `date=${date}`, away && `away=${away}`, home && `home=${home}`].filter(Boolean);
+    return apiFetch<{ boxscore: BoxScore }>(`/api/games/${id}/boxscore${params.length ? '?' + params.join('&') : ''}`);
+  },
 
   getPlayersByGame: (id: number) =>
     apiFetch<{ players: PlayerGameStats[] }>(`/api/games/${id}/players`),

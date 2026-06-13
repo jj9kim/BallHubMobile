@@ -192,7 +192,7 @@ function OverviewTab({ teamKey, standing, allStandings }: {
         const lastGame = [...games].filter(isGameFinal).pop();
         if (lastGame) {
           const [boxRes, mapRes] = await Promise.all([
-            NBAService.getBoxScore(lastGame.GameID),
+            NBAService.getBoxScore(lastGame.GameID, lastGame.Day ?? undefined, lastGame.AwayTeam, lastGame.HomeTeam),
             NBAService.getNbaIdMap(),
           ]);
           const players: any[] = boxRes.boxscore?.PlayerGames ?? [];

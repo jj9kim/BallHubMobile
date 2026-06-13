@@ -824,7 +824,7 @@ export async function getSchedule(season) {
 
 // ── Box score ─────────────────────────────────────────────────────────────────
 
-export async function getBoxScore(gameId) {
+export async function getBoxScore(gameId, gameDate = null, awayHint = null, homeHint = null) {
   // ESPN IDs are 9 digits (e.g. 401859963); NBA IDs start with 002/004 (10 digits)
   // If the ID doesn't look like an NBA game ID, use ESPN box score
   const idStr = String(gameId);
@@ -853,7 +853,40 @@ export async function getBoxScore(gameId) {
 
   const players  = parseRS(data.resultSets, 'PlayerStats');
   const teamRows = parseRS(data.resultSets, 'TeamStats');
-  if (!players.length) throw new Error(`Box score not found for game ${gameId}`);
+  if (!players.length) {
+    // NBA API returned empty — find ESPN game ID from daily scoreboard by matching teams
+    if (gameDate) {
+      // Get the two teams from the NBA game summary
+      const gameSummaryRows = parseRS(data.resultSets, 'GameSummary');
+      const summaryRow = gameSummaryRows[0];
+      const homeId = summaryRow?.HOME_TEAM_ID;
+      const visitorId = summaryRow?.VISITOR_TEAM_ID;
+      const homeAbbr = homeId ? (ID_TO_APP[parseInt(homeId)] ?? '') : '';
+      const awayAbbr = visitorId ? (ID_TO_APP[parseInt(visitorId)] ?? '') : '';
+
+      for (let offset = -1; offset <= 1; offset++) {
+        const d = new Date(gameDate + 'T12:00:00Z');
+        d.setUTCDate(d.getUTCDate() + offset);
+        const adjDate = d.toISOString().split('T')[0];
+        const sbCache = readDisk(`espn_scoreboard_${adjDate}`);
+        const sbGames = Array.isArray(sbCache) ? sbCache : [];
+        // Match by team IDs, abbreviations, or passed team params
+        const aliases = ESPN_TEAM_ALIASES;
+        const matchesTeam = (sbTeam, key) => {
+          if (!key) return false;
+          const possible = aliases[key] ?? [key];
+          return possible.includes(sbTeam);
+        };
+        const match = sbGames.find(g =>
+          (homeId && g.HomeTeamID === parseInt(homeId) && g.AwayTeamID === parseInt(visitorId)) ||
+          (homeAbbr && matchesTeam(g.HomeTeam, homeAbbr) && matchesTeam(g.AwayTeam, awayAbbr)) ||
+          (homeHint && matchesTeam(g.HomeTeam, homeHint) && awayHint && matchesTeam(g.AwayTeam, awayHint))
+        );
+        if (match?._espnId) return getEspnBoxScore(match._espnId);
+      }
+    }
+    throw new Error(`Box score not found for game ${gameId}`);
+  }
 
   // Map abbreviation from first player row
   const awayAbbr = toAppAbbr(players.find(p => p.TEAM_ABBREVIATION)?.TEAM_ABBREVIATION ?? '');
