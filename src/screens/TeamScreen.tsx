@@ -203,7 +203,7 @@ function OverviewTab({ teamKey, standing, allStandings }: {
       .catch(() => setLoading(false));
   }, [teamKey]);
 
-  const last5  = schedule.filter(isGameFinal).slice(-5);
+  const last5  = schedule.filter(isGameFinal);
   const next   = schedule.find(g => !isGameFinal(g) && g.Status !== 'InProgress' && g.Status !== 'NotNecessary');
   const sorted = [...allStandings].sort((a, b) => b.Percentage - a.Percentage);
   const seasonStats = computeSeasonStats(schedule, teamKey);
@@ -219,24 +219,26 @@ function OverviewTab({ teamKey, standing, allStandings }: {
         ) : last5.length === 0 ? (
           <Text style={s.emptyText}>No recent games</Text>
         ) : (
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 12 }}>
-            {last5.map(g => {
-              const isHome   = g.HomeTeam === teamKey;
-              const myScore  = isHome ? g.HomeTeamScore : g.AwayTeamScore;
-              const oppScore = isHome ? g.AwayTeamScore : g.HomeTeamScore;
-              const won      = myScore > oppScore;
-              const opp      = isHome ? g.AwayTeam : g.HomeTeam;
-              return (
-                <View key={g.GameID} style={{ alignItems: 'center', gap: 7 }}>
-                  <TeamLogo abbrev={opp} size={32} />
-                  <View style={[s.wlDot, { backgroundColor: won ? '#1a3a1a' : '#3a1a1a', borderColor: won ? '#4caf50' : '#e05a5a' }]}>
-                    <Text style={[{ fontSize: 10, fontWeight: '800' }, won ? s.winnerText : s.loserText]}>{won ? 'W' : 'L'}</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 12 }}>
+            <View style={{ flexDirection: 'row', gap: 14 }}>
+              {last5.map(g => {
+                const isHome   = g.HomeTeam === teamKey;
+                const myScore  = isHome ? g.HomeTeamScore : g.AwayTeamScore;
+                const oppScore = isHome ? g.AwayTeamScore : g.HomeTeamScore;
+                const won      = myScore > oppScore;
+                const opp      = isHome ? g.AwayTeam : g.HomeTeam;
+                return (
+                  <View key={g.GameID} style={{ alignItems: 'center', gap: 7 }}>
+                    <TeamLogo abbrev={opp} size={32} />
+                    <View style={[s.wlDot, { backgroundColor: won ? '#1a3a1a' : '#3a1a1a', borderColor: won ? '#4caf50' : '#e05a5a' }]}>
+                      <Text style={[{ fontSize: 10, fontWeight: '800' }, won ? s.winnerText : s.loserText]}>{won ? 'W' : 'L'}</Text>
+                    </View>
+                    <Text style={s.formScore}>{myScore}–{oppScore}</Text>
                   </View>
-                  <Text style={s.formScore}>{myScore}–{oppScore}</Text>
-                </View>
-              );
-            })}
-          </View>
+                );
+              })}
+            </View>
+          </ScrollView>
         )}
       </View>
 
