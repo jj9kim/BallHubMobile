@@ -196,7 +196,13 @@ function OverviewTab({ teamKey, standing, allStandings }: {
             NBAService.getNbaIdMap(),
           ]);
           const players: any[] = boxRes.boxscore?.PlayerGames ?? [];
-          setStarters(players.filter(p => p.Team === teamKey && p.Started === 1));
+          // teamKey from standings may differ from boxscore abbreviation (e.g. GSW→GS, NOP→NO)
+          // Determine our team's abbreviation by ruling out the opponent's
+          const boxTeams = [...new Set(players.map((p: any) => p.Team as string))];
+          const oppKey = lastGame.HomeTeam === teamKey ? lastGame.AwayTeam : lastGame.HomeTeam;
+          const oppBoxTeam = boxTeams.find(t => t === oppKey) ?? boxTeams.find(t => t !== teamKey) ?? '';
+          const ourBoxTeam = boxTeams.find(t => t !== oppBoxTeam) ?? teamKey;
+          setStarters(players.filter(p => p.Team === ourBoxTeam && p.Started === 1));
           setNbaIdMap(mapRes.map ?? {});
         }
         setLoading(false);
