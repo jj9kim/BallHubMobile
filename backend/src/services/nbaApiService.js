@@ -620,12 +620,47 @@ export async function getLiveGames() {
   return games.filter(g => g.Status === 'InProgress');
 }
 
+function enrichNullScores(games) {
+  const todayStr = new Date().toISOString().split('T')[0];
+  for (const g of games) {
+    if (!g.Day || g.Day >= todayStr || g.AwayTeamScore != null) continue;
+    for (let offset = -1; offset <= 1; offset++) {
+      const d = new Date(g.Day + 'T12:00:00Z');
+      d.setUTCDate(d.getUTCDate() + offset);
+      const adjDate = d.toISOString().split('T')[0];
+      const sbCache = readDisk(`espn_scoreboard_${adjDate}`);
+      const sbGames = Array.isArray(sbCache) ? sbCache : [];
+      const match = sbGames.find(sb =>
+        (sb.AwayTeam === g.AwayTeam && sb.HomeTeam === g.HomeTeam) ||
+        (sb.AwayTeam === g.HomeTeam && sb.HomeTeam === g.AwayTeam)
+      );
+      if (match && match.AwayTeamScore != null) {
+        g.AwayTeamScore = match.AwayTeam === g.AwayTeam ? match.AwayTeamScore : match.HomeTeamScore;
+        g.HomeTeamScore = match.AwayTeam === g.AwayTeam ? match.HomeTeamScore : match.AwayTeamScore;
+        g.Status = match.Status;
+        break;
+      }
+    }
+  }
+  return games;
+}
+
 async function getEspnTeamRegularSeason(appAbbr, espnSeason) {
   const espnId = ESPN_TEAM_IDS[appAbbr];
   if (!espnId) return [];
   const cacheKey = `espn_team_reg_${appAbbr}_${espnSeason}`;
+
   const cached = readDisk(cacheKey);
-  if (cached !== undefined) return cached;
+  if (cached !== undefined) {
+    // Re-enrich on cache hit in case new scoreboard caches have been added since
+    const enriched = enrichNullScores([...cached]);
+    const wasEnriched = enriched.some((g, i) => g.AwayTeamScore !== cached[i]?.AwayTeamScore);
+    if (wasEnriched) {
+      const hasNullFinals = enriched.some(g => g.Status === 'Final' && g.AwayTeamScore == null);
+      writeDisk(cacheKey, enriched, hasNullFinals ? 3600 : 86400 * 30);
+    }
+    return enriched;
+  }
 
   try {
     const { data } = await espnClient.get(
@@ -665,7 +700,9 @@ async function getEspnTeamRegularSeason(appAbbr, espnSeason) {
         Channel: null, Attendance: null,
       });
     }
-    writeDisk(cacheKey, games, 86400 * 30);
+    enrichNullScores(games);
+    const hasNullFinals = games.some(g => g.Status === 'Final' && g.AwayTeamScore == null);
+    writeDisk(cacheKey, games, hasNullFinals ? 3600 : 86400 * 30);
     return games;
   } catch {
     return [];
@@ -681,11 +718,10 @@ export async function getTeamSchedule(season, teamAbbr) {
   const seasonStr = toSeasonStr(season);
   const appAbbr = toAppAbbr(teamAbbr);
 
-  // Regular season: use NBA API if cached, otherwise go straight to ESPN
+  // Regular season: always try NBA API first (it includes final scores via PTS/PLUS_MINUS)
   let reg = [];
   const regCacheKey = `schedule_reg_${teamAbbr}_${season}`;
-  const hasNbaCache = readDisk(regCacheKey) !== undefined;
-  if (hasNbaCache) try {
+  try {
     const regData = await nbFetch('/stats/leaguegamefinder', {
       PlayerOrTeam: 'T', TeamID: teamId,
       Season: seasonStr, SeasonType: 'Regular Season', LeagueID: '00',
