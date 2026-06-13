@@ -624,7 +624,7 @@ function enrichNullScores(games) {
   const todayStr = new Date().toISOString().split('T')[0];
   for (const g of games) {
     if (!g.Day || g.Day >= todayStr || g.AwayTeamScore != null) continue;
-    for (let offset = -1; offset <= 1; offset++) {
+    for (const offset of [0, -1, 1]) {
       const d = new Date(g.Day + 'T12:00:00Z');
       d.setUTCDate(d.getUTCDate() + offset);
       const adjDate = d.toISOString().split('T')[0];
@@ -864,7 +864,7 @@ export async function getBoxScore(gameId, gameDate = null, awayHint = null, home
       const homeAbbr = homeId ? (ID_TO_APP[parseInt(homeId)] ?? '') : '';
       const awayAbbr = visitorId ? (ID_TO_APP[parseInt(visitorId)] ?? '') : '';
 
-      for (let offset = -1; offset <= 1; offset++) {
+      for (const offset of [0, -1, 1]) {
         const d = new Date(gameDate + 'T12:00:00Z');
         d.setUTCDate(d.getUTCDate() + offset);
         const adjDate = d.toISOString().split('T')[0];
