@@ -209,10 +209,18 @@ async function getEspnGamesByDate(date) {
   const espnDate = date.replace(/-/g, '');
   const cacheKey = `espn_scoreboard_${date}`;
   const isPast = new Date(date) < new Date(new Date().toDateString());
-  const ttl = isPast ? 86400 * 30 : 60;
 
   const cached = readDisk(cacheKey);
-  if (cached !== undefined) return cached;
+  if (cached !== undefined) {
+    // Bust stale cache for past dates where all games are still Scheduled (no scores)
+    if (isPast && Array.isArray(cached) && cached.length > 0 && cached.every(g => g.Status === 'Scheduled' && !g.AwayTeamScore)) {
+      const cacheFile = join(CACHE_DIR, fileKey(cacheKey));
+      if (existsSync(cacheFile)) unlinkSync(cacheFile);
+      memCache.del(cacheKey);
+    } else {
+      return cached;
+    }
+  }
 
   try {
     const { data } = await espnClient.get(
@@ -261,8 +269,10 @@ async function getEspnGamesByDate(date) {
       };
     });
 
-    if (games.length > 0 && (isFinalData(games) || isPast)) {
-      writeDisk(cacheKey, games, ttl);
+    if (games.length > 0) {
+      const allFinal = isFinalData(games);
+      const ttl = allFinal ? 86400 * 30 : isPast ? 300 : 60;
+      if (allFinal || !isPast) writeDisk(cacheKey, games, ttl);
     }
     return games;
   } catch {
