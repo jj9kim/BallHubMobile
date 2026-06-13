@@ -206,11 +206,12 @@ function OverviewTab({ teamKey, standing, allStandings }: {
             NBAService.getNbaIdMap(),
           ]);
           const players: any[] = boxRes.boxscore?.PlayerGames ?? [];
-          // teamKey from standings may differ from boxscore abbreviation (e.g. GSW→GS, NOP→NO)
-          const KEY_TO_BOX: Record<string, string> = { GSW: 'GS', NOP: 'NO', UTA: 'UTAH', WAS: 'WSH' };
-          const BOX_TO_KEY: Record<string, string> = { GS: 'GSW', NO: 'NOP', UTAH: 'UTA', WSH: 'WAS' };
-          const ourBoxTeam = KEY_TO_BOX[teamKey] ?? teamKey;
-          setStarters(players.filter(p => (p.Team === ourBoxTeam || p.Team === teamKey) && p.Started === 1));
+          // Find which abbreviation the boxscore uses for our team by checking all known aliases
+          const TEAM_ABBR_VARIANTS: Record<string, string[]> = {
+            GSW: ['GSW','GS'], NOP: ['NOP','NO'], UTA: ['UTA','UTAH'], WAS: ['WAS','WSH'],
+          };
+          const ourVariants = new Set(TEAM_ABBR_VARIANTS[teamKey] ?? [teamKey]);
+          setStarters(players.filter(p => ourVariants.has(p.Team) && p.Started === 1));
           setNbaIdMap(mapRes.map ?? {});
         }
         setLoading(false);
