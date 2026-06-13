@@ -727,10 +727,10 @@ function CapBar({ year, total, caps, statusColor }: {
 function ContractPlayerRow({ player: p, alt, teamKey, nameFontSize, width, playerIdMap }: { player: any; alt: boolean; teamKey: string; nameFontSize: number; width: number; playerIdMap: Record<string, number> }) {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [failed, setFailed] = useState(false);
-  const uri = p.PhotoUrl ?? null;
   const normalize = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
   const playerId = playerIdMap[normalize(p.Name ?? '')];
-
+  // ESPN may not have a photo for some players — fall back to NBA.com headshot via roster ID
+  const uri = p.PhotoUrl ?? (playerId ? `https://cdn.nba.com/headshots/nba/latest/1040x760/${playerId}.png` : null);
   return (
     <TouchableOpacity
       style={[ct.nameRow, alt && { backgroundColor: '#191919' }, { width, flexDirection: 'row', alignItems: 'center', gap: 7 }]}
