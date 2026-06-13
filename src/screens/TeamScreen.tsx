@@ -149,6 +149,15 @@ function HalfCourt({ starters, nbaIdMap }: { starters: any[]; nbaIdMap: Record<n
   );
 }
 
+// ESPN schedule may store NOP/UTA/WAS/GSW as NO/UTAH/WSH/GS
+const TEAM_ALIASES: Record<string, string[]> = {
+  NOP: ['NOP','NO'], UTA: ['UTA','UTAH'], WAS: ['WAS','WSH'], GSW: ['GSW','GS'],
+};
+function isOurTeam(abbr: string, teamKey: string): boolean {
+  const alts = TEAM_ALIASES[teamKey] ?? [teamKey];
+  return alts.includes(abbr);
+}
+
 // ── Season Stats computed from schedule ───────────────────────────────────────
 
 function computeSeasonStats(games: Game[], teamKey: string) {
@@ -156,7 +165,7 @@ function computeSeasonStats(games: Game[], teamKey: string) {
   if (finished.length === 0) return null;
   let totalPts = 0, totalOpp = 0, homeW = 0, homeL = 0, awayW = 0, awayL = 0;
   finished.forEach(g => {
-    const isHome  = g.HomeTeam === teamKey;
+    const isHome  = isOurTeam(g.HomeTeam, teamKey);
     const my  = isHome ? g.HomeTeamScore : g.AwayTeamScore;
     const opp = isHome ? g.AwayTeamScore : g.HomeTeamScore;
     totalPts += my; totalOpp += opp;
@@ -229,7 +238,7 @@ function OverviewTab({ teamKey, standing, allStandings }: {
         ) : (
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 12 }}>
             {last5.map(g => {
-              const isHome   = g.HomeTeam === teamKey;
+              const isHome   = isOurTeam(g.HomeTeam, teamKey);
               const myScore  = isHome ? g.HomeTeamScore : g.AwayTeamScore;
               const oppScore = isHome ? g.AwayTeamScore : g.HomeTeamScore;
               const won      = myScore > oppScore;
