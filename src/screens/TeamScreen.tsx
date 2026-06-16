@@ -207,17 +207,31 @@ function OverviewTab({ teamKey, standing, allStandings }: {
         setSchedule(games);
         const lastGame = [...games].filter(isGameFinal).pop();
         if (lastGame) {
-          const [boxRes, mapRes] = await Promise.all([
+          const [boxRes, mapRes, rosterRes] = await Promise.all([
             NBAService.getBoxScore(lastGame.GameID, lastGame.Day ?? undefined, lastGame.AwayTeam, lastGame.HomeTeam),
             NBAService.getNbaIdMap(),
+            NBAService.getTeamRoster(teamKey),
           ]);
           const players: any[] = boxRes.boxscore?.PlayerGames ?? [];
-          // Find which abbreviation the boxscore uses for our team by checking all known aliases
           const TEAM_ABBR_VARIANTS: Record<string, string[]> = {
             GSW: ['GSW','GS'], NOP: ['NOP','NO'], UTA: ['UTA','UTAH'], WAS: ['WAS','WSH'],
           };
           const ourVariants = new Set(TEAM_ABBR_VARIANTS[teamKey] ?? [teamKey]);
-          setStarters(players.filter(p => ourVariants.has(p.Team) && p.Started === 1));
+          const teamStarters = players.filter(p => ourVariants.has(p.Team) && p.Started === 1);
+
+          // Build name→SportsData PlayerID map from roster so tapping navigates correctly
+          const normalize = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+          const nameToId: Record<string, number> = {};
+          (rosterRes.players ?? []).forEach((p: Player) => {
+            nameToId[normalize(`${p.FirstName} ${p.LastName}`)] = p.PlayerID;
+          });
+          // Attach the correct PlayerID to each starter
+          const startersWithId = teamStarters.map(p => {
+            const id = nameToId[normalize(p.Name ?? '')] ?? p.PlayerID;
+            return { ...p, PlayerID: id };
+          });
+
+          setStarters(startersWithId);
           setNbaIdMap(mapRes.map ?? {});
         }
         setLoading(false);
