@@ -84,14 +84,20 @@ function StarterPin({ player, x, y, courtW, courtH, nbaIdMap }: {
   player: any; x: number; y: number; courtW: number; courtH: number;
   nbaIdMap: Record<number,number>;
 }) {
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [failed, setFailed] = useState(false);
-  const left  = (x / 100) * courtW;
-  const top   = (y / 100) * courtH;
-  const nbaid = nbaIdMap[player.PlayerID];
-  const uri   = nbaid ? `https://cdn.nba.com/headshots/nba/latest/1040x760/${nbaid}.png` : player.PhotoUrl;
+  const left   = (x / 100) * courtW;
+  const top    = (y / 100) * courtH;
+  const nbaid  = nbaIdMap[player.PlayerID];
+  const uri    = nbaid ? `https://cdn.nba.com/headshots/nba/latest/1040x760/${nbaid}.png` : player.PhotoUrl;
+  const playerId = nbaid ?? player.PlayerID;
 
   return (
-    <View style={{ position: 'absolute', left: left - 22, top: top - 28, alignItems: 'center', width: 44 }}>
+    <TouchableOpacity
+      style={{ position: 'absolute', left: left - 22, top: top - 28, alignItems: 'center', width: 44 }}
+      onPress={() => playerId && navigation.navigate('PlayerProfile', { playerId })}
+      activeOpacity={0.75}
+    >
       <View style={{ width: 38, height: 38, borderRadius: 19, overflow: 'hidden', borderWidth: 2, borderColor: '#fff', backgroundColor: '#333' }}>
         {!failed && uri ? (
           <Image source={{ uri }} style={{ width: '100%', height: '100%' }} resizeMode="cover" onError={() => setFailed(true)} />
@@ -104,7 +110,7 @@ function StarterPin({ player, x, y, courtW, courtH, nbaIdMap }: {
       <Text style={{ color: '#fff', fontSize: 8, fontWeight: '600', marginTop: 2 }} numberOfLines={1}>
         #{player.Jersey} {player.LastName}
       </Text>
-    </View>
+    </TouchableOpacity>
   );
 }
 
