@@ -6,7 +6,7 @@ import gamesRouter from './routes/games.js';
 import standingsRouter from './routes/standings.js';
 import teamsRouter from './routes/teams.js';
 import playersRouter from './routes/players.js';
-import { getStandings, getSchedule, getDraftClass, getAllHistoricalPlayers, getPlayerCareerStats, getTeamRoster, existsDisk } from './services/nbaApiService.js';
+import { getStandings, getSchedule, getDraftClass, getAllHistoricalPlayers, getPlayerCareerStats, getPlayerGameLogs, getTeamRoster, existsDisk, getAllPlayerSeasonStats } from './services/nbaApiService.js';
 
 const app = express();
 const PORT = process.env.PORT ?? 5000;
@@ -61,6 +61,14 @@ app.listen(PORT, async () => {
       console.log('Historical player map ready');
     } catch {}
 
+    // Step 2b: pre-warm current season stats for all players (single API call)
+    const now = new Date();
+    const currentSeason = now.getMonth() + 1 >= 10 ? now.getFullYear() : now.getFullYear() - 1;
+    try {
+      await getAllPlayerSeasonStats(currentSeason);
+      console.log(`Season stats cache ready (${currentSeason}-${String(currentSeason + 1).slice(2)})`);
+    } catch { console.log('Season stats pre-warm skipped (NBA API unavailable)'); }
+
     // Step 3: cache every player profile + career stats individually (like draft classes)
     // Skips already-cached players so restarts pick up where they left off
     const allIds = [...allNbaIds];
@@ -89,6 +97,10 @@ app.listen(PORT, async () => {
       if (!existsDisk(`career_seasons_${id}`)) {
         try { await getPlayerCareerStats(id); }
         catch { ok = false; }
+      }
+      if (!existsDisk(`gamelogs_nba_${id}_${currentSeason}`)) {
+        try { await getPlayerGameLogs(currentSeason, id); }
+        catch {}
       }
       done++;
       await new Promise(r => setTimeout(r, 800));

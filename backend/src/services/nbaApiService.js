@@ -1354,26 +1354,24 @@ export async function getPlayerSeasonStats(season, playerId) {
   const seasonStr = toSeasonStr(parseInt(season));
   const cacheKey  = `seasonstats_all_${season}`;
 
-  if (readDisk(cacheKey) !== undefined) {
-    try {
-      const data = await nbFetch('/stats/leaguedashplayerstats', {
-        Season: seasonStr, SeasonType: 'Regular Season',
-        PerMode: 'PerGame', LeagueID: '00',
-      }, 3600, cacheKey);
-      const rows = parseRS(data.resultSets, 'LeagueDashPlayerStats');
-      const r = rows.find(p => p.PLAYER_ID === Number(playerId));
-      if (r) return {
-        PlayerID: Number(playerId), Season: Number(season),
-        Games: r.GP ?? 0, Minutes: r.MIN ?? 0,
-        Points: r.PTS ?? 0, Rebounds: r.REB ?? 0, Assists: r.AST ?? 0,
-        Steals: r.STL ?? 0, BlockedShots: r.BLK ?? 0, Turnovers: r.TOV ?? 0,
-        FieldGoalsPercentage: r.FG_PCT ?? 0, ThreePointersPercentage: r.FG3_PCT ?? 0,
-        FreeThrowsPercentage: r.FT_PCT ?? 0, TrueShootingPercentage: 0,
-        PlayerEfficiencyRating: 0, UsageRatePercentage: 0,
-        PlusMinus: r.PLUS_MINUS ?? 0, DoubleDoubles: r.DD2 ?? 0, TripleDoubles: r.TD3 ?? 0,
-      };
-    } catch {}
-  }
+  try {
+    const data = await nbFetch('/stats/leaguedashplayerstats', {
+      Season: seasonStr, SeasonType: 'Regular Season',
+      PerMode: 'PerGame', LeagueID: '00',
+    }, 3600, cacheKey);
+    const rows = parseRS(data.resultSets, 'LeagueDashPlayerStats');
+    const r = rows.find(p => p.PLAYER_ID === Number(playerId));
+    if (r) return {
+      PlayerID: Number(playerId), Season: Number(season),
+      Games: r.GP ?? 0, Minutes: r.MIN ?? 0,
+      Points: r.PTS ?? 0, Rebounds: r.REB ?? 0, Assists: r.AST ?? 0,
+      Steals: r.STL ?? 0, BlockedShots: r.BLK ?? 0, Turnovers: r.TOV ?? 0,
+      FieldGoalsPercentage: r.FG_PCT ?? 0, ThreePointersPercentage: r.FG3_PCT ?? 0,
+      FreeThrowsPercentage: r.FT_PCT ?? 0, TrueShootingPercentage: 0,
+      PlayerEfficiencyRating: 0, UsageRatePercentage: 0,
+      PlusMinus: r.PLUS_MINUS ?? 0, DoubleDoubles: r.DD2 ?? 0, TripleDoubles: r.TD3 ?? 0,
+    };
+  } catch {}
 
   // Fallback: compute averages from regular season game logs only
   const allLogs = await getPlayerGameLogs(season, playerId).catch(() => []);
