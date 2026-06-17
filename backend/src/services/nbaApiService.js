@@ -1209,7 +1209,7 @@ export async function getAllPlayers() {
 
 export async function getPlayerById(playerId) {
   try {
-    const data = await nbFetch('/stats/commonplayerinfo', { PlayerID: playerId }, 86400, `player_${playerId}`);
+    const data = await nbFetch('/stats/commonplayerinfo', { PlayerID: playerId }, 86400 * 30, `player_${playerId}`);
     const rows = parseRS(data.resultSets, 'CommonPlayerInfo');
     if (!rows.length) throw new Error('empty');
     const p = rows[0];
@@ -1444,7 +1444,7 @@ export async function getPlayerCareerStats(playerId) {
   try {
     // Use NBA.com playercareerstats — works for active AND retired players
     // Use a separate raw cache key so nbFetch doesn't collide with our processed result
-    const data = await nbFetch('/stats/playercareerstats', { PlayerID: playerId, PerMode: 'PerGame' }, 86400, `career_raw_${playerId}`);
+    const data = await nbFetch('/stats/playercareerstats', { PlayerID: playerId, PerMode: 'PerGame' }, 86400 * 7, `career_raw_${playerId}`);
     const rows = parseRS(data.resultSets, 'SeasonTotalsRegularSeason');
     if (!rows.length) return [];
 
