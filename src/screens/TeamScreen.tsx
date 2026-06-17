@@ -94,32 +94,35 @@ function StarterPin({ player, x, y, courtW, courtH, nbaIdMap }: {
   const pos      = (player.Position ?? '').toUpperCase();
   const teamColor = teamColors[player.Team] ?? '#555';
 
+  const lastName = player.LastName ?? player.Name?.split(' ').pop() ?? '?';
+
   return (
     <TouchableOpacity
-      style={{ position: 'absolute', left: left - 26, top: top - 34, alignItems: 'center', width: 52 }}
+      style={{ position: 'absolute', left: left - 28, top: top - 32, alignItems: 'center', width: 56 }}
       onPress={() => playerId && navigation.navigate('PlayerProfile', { playerId })}
-      activeOpacity={0.75}
+      activeOpacity={0.7}
     >
-      {/* Avatar */}
-      <View style={{ width: 46, height: 46, borderRadius: 23, overflow: 'hidden', borderWidth: 2, borderColor: teamColor, backgroundColor: '#1e1e1e' }}>
-        {!failed && uri ? (
-          <Image source={{ uri }} style={{ width: '100%', height: '100%' }} resizeMode="cover" onError={() => setFailed(true)} />
-        ) : (
-          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: teamColor }}>
-            <Text style={{ color: '#fff', fontSize: 11, fontWeight: '800' }}>{player.LastName?.slice(0, 2).toUpperCase()}</Text>
-          </View>
-        )}
-      </View>
-      {/* Position badge */}
-      {pos ? (
-        <View style={{ position: 'absolute', top: -4, right: 2, backgroundColor: teamColor, borderRadius: 4, paddingHorizontal: 3, paddingVertical: 1 }}>
-          <Text style={{ color: '#fff', fontSize: 7, fontWeight: '800' }}>{pos}</Text>
+      {/* Outer glow ring */}
+      <View style={{
+        width: 50, height: 50, borderRadius: 25,
+        backgroundColor: teamColor + '33',
+        alignItems: 'center', justifyContent: 'center',
+      }}>
+        {/* Photo circle */}
+        <View style={{ width: 42, height: 42, borderRadius: 21, overflow: 'hidden', borderWidth: 2, borderColor: teamColor, backgroundColor: '#222' }}>
+          {!failed && uri ? (
+            <Image source={{ uri }} style={{ width: '100%', height: '100%' }} resizeMode="cover" onError={() => setFailed(true)} />
+          ) : (
+            <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: teamColor }}>
+              <Text style={{ color: '#fff', fontSize: 12, fontWeight: '800' }}>{lastName.slice(0, 2).toUpperCase()}</Text>
+            </View>
+          )}
         </View>
-      ) : null}
-      {/* Name */}
-      <View style={{ marginTop: 3, backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: 4, paddingHorizontal: 4, paddingVertical: 1.5 }}>
-        <Text style={{ color: '#fff', fontSize: 8.5, fontWeight: '700', letterSpacing: 0.2 }} numberOfLines={1}>
-          {player.LastName}
+      </View>
+      {/* Name pill */}
+      <View style={{ marginTop: 4, backgroundColor: 'rgba(0,0,0,0.72)', borderRadius: 6, paddingHorizontal: 5, paddingVertical: 2 }}>
+        <Text style={{ color: '#fff', fontSize: 9, fontWeight: '700', letterSpacing: 0.3 }} numberOfLines={1}>
+          {lastName}
         </Text>
       </View>
     </TouchableOpacity>
@@ -159,13 +162,6 @@ function HalfCourt({ starters, nbaIdMap }: { starters: any[]; nbaIdMap: Record<n
         <Rect x={courtW*0.29} y={0} width={courtW*0.42} height={courtH*0.36} stroke="#3a3a3a" strokeWidth={1.5} fill="rgba(255,255,255,0.02)" />
         {/* Free-throw circle */}
         <Circle cx={courtW*0.5} cy={courtH*0.36} r={courtW*0.13} stroke="#3a3a3a" strokeWidth={1.5} fill="none" />
-        {/* Basket */}
-        <Circle cx={courtW*0.5} cy={courtH*0.06} r={courtW*0.025} stroke="#5a8a5a" strokeWidth={1.5} fill="none" />
-        {/* Restricted area arc */}
-        <Path
-          d={`M ${courtW*0.425} ${courtH*0.06} A ${courtW*0.075} ${courtW*0.075} 0 0 0 ${courtW*0.575} ${courtH*0.06}`}
-          stroke="#3a3a3a" strokeWidth={1.5} fill="none"
-        />
         {/* Three-point arc */}
         <Path
           d={`M ${courtW*0.09} 0 L ${courtW*0.09} ${courtH*0.38} A ${courtW*0.43} ${courtW*0.43} 0 0 0 ${courtW*0.91} ${courtH*0.38} L ${courtW*0.91} 0`}
