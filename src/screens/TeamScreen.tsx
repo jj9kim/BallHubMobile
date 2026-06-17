@@ -91,7 +91,8 @@ function StarterPin({ player, x, y, courtW, courtH, nbaIdMap }: {
   const uri       = player.PhotoUrl;
   const playerId  = player.PlayerID;  // already resolved to roster ID (or null if no match)
   const teamColor = teamColors[player.Team] ?? '#555';
-  const lastName = player.LastName ?? player.Name?.split(' ').pop() ?? '?';
+  const fullName = player.Name ?? `${player.FirstName ?? ''} ${player.LastName ?? ''}`.trim();
+  const lastName = player.LastName ?? fullName.split(' ').slice(1).join(' ') ?? '?';
 
   return (
     <TouchableOpacity
