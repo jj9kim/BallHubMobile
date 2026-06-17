@@ -1356,63 +1356,64 @@ async function getNbaGameLogs(season, playerId) {
 
 // ── Team season stats ─────────────────────────────────────────────────────────
 
+// ESPN team slug overrides (mirrors frontend teamMappings.ts)
+const ESPN_TEAM_SLUGS = { UTA:'utah', NOP:'no', GSW:'gs', NY:'ny', SA:'sa' };
+function espnTeamSlug(abbr) { return ESPN_TEAM_SLUGS[abbr] ?? abbr.toLowerCase(); }
+
 export async function getTeamSeasonStats(season, teamAbbr) {
-  season = parseInt(season);
-  const seasonStr = toSeasonStr(season);
-  const cacheKey  = `teamstats_all_${season}`;
+  const appAbbr  = teamAbbr.toUpperCase();
+  const slug     = espnTeamSlug(appAbbr);
+  const cacheKey = `teamstats_espn_${appAbbr}`;
 
-  const fetchAll = (seasonType) => nbFetch('/stats/leaguedashteamstats', {
-    Season: seasonStr, SeasonType: seasonType,
-    PerMode: 'PerGame', LeagueID: '00',
-    MeasureType: 'Base',
-  }, TTL_SEASON, `${cacheKey}_${seasonType.replace(/ /g,'_')}`);
+  const cached = readDisk(cacheKey);
+  if (cached !== undefined) return cached;
 
-  const [regData, poData] = await Promise.allSettled([
-    fetchAll('Regular Season'),
-    fetchAll('Playoffs'),
-  ]);
+  try {
+    const { data } = await espnClient.get(
+      `/apis/site/v2/sports/basketball/nba/teams/${slug}/statistics`
+    );
 
-  const appAbbr = teamAbbr.toUpperCase();
-  const aliases = ESPN_TEAM_ALIASES[appAbbr] ?? [appAbbr];
+    const cats = data.results?.stats?.categories ?? [];
+    const statsMap = {};
+    cats.forEach(c => c.stats.forEach(s => {
+      // Only take the per-game (float) values, skip raw totals
+      if (!statsMap[s.abbreviation] && typeof s.value === 'number' && !Number.isInteger(s.value)) {
+        statsMap[s.abbreviation] = s.value;
+      } else if (!statsMap[s.abbreviation]) {
+        statsMap[s.abbreviation] = s.value;
+      }
+    }));
 
-  function findTeam(data) {
-    if (!data?.resultSets) return null;
-    const rows = parseRS(data.resultSets, 'LeagueDashTeamStats');
-    return rows.find(r => {
-      const a = toAppAbbr(r.TEAM_ABBREVIATION ?? '');
-      return a === appAbbr || aliases.includes(a);
-    }) ?? null;
-  }
+    // Resolve per-game values by display name to avoid duplicate abbrev collisions
+    function getStat(cat, name) {
+      const c = cats.find(c2 => c2.name === cat);
+      return c?.stats.find(s => s.name === name)?.value ?? 0;
+    }
 
-  function mapRow(r) {
-    if (!r) return null;
-    return {
-      GP:    r.GP  ?? 0,
-      W:     r.W   ?? 0,
-      L:     r.L   ?? 0,
-      WinPct: r.W_PCT ?? 0,
-      PTS:   r.PTS ?? 0,
-      REB:   r.REB ?? 0,
-      AST:   r.AST ?? 0,
-      STL:   r.STL ?? 0,
-      BLK:   r.BLK ?? 0,
-      TOV:   r.TOV ?? 0,
-      OREB:  r.OREB ?? 0,
-      DREB:  r.DREB ?? 0,
-      FGPct: r.FG_PCT  ?? 0,
-      TPPct: r.FG3_PCT ?? 0,
-      FTPct: r.FT_PCT  ?? 0,
-      PlusMinus: r.PLUS_MINUS ?? 0,
+    const result = {
+      regular: {
+        GP:    getStat('general',  'gamesPlayed') || Math.round(getStat('general', 'GP')) || 0,
+        PTS:   getStat('offensive', 'avgPoints'),
+        REB:   getStat('general',  'avgRebounds'),
+        AST:   getStat('offensive', 'avgAssists'),
+        TOV:   getStat('offensive', 'avgTurnovers'),
+        STL:   getStat('defensive', 'avgSteals'),
+        BLK:   getStat('defensive', 'avgBlocks'),
+        OREB:  getStat('offensive', 'avgOffensiveRebounds'),
+        DREB:  getStat('defensive', 'avgDefensiveRebounds'),
+        FGPct: getStat('offensive', 'fieldGoalPct') / 100,
+        TPPct: getStat('offensive', 'threePointFieldGoalPct') / 100,
+        FTPct: getStat('offensive', 'freeThrowPct') / 100,
+        PlusMinus: 0,
+      },
+      playoffs: null,
     };
+
+    writeDisk(cacheKey, result, TTL_SEASON);
+    return result;
+  } catch (err) {
+    throw new Error(`Team stats unavailable: ${err.message}`);
   }
-
-  const regRow = regData.status === 'fulfilled' ? findTeam(regData.value) : null;
-  const poRow  = poData.status  === 'fulfilled' ? findTeam(poData.value)  : null;
-
-  return {
-    regular:  mapRow(regRow),
-    playoffs: mapRow(poRow),
-  };
 }
 
 // ── Player season stats ───────────────────────────────────────────────────────
