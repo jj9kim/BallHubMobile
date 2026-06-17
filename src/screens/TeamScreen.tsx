@@ -149,27 +149,27 @@ function HalfCourt({ starters, nbaIdMap }: { starters: any[]; nbaIdMap: Record<n
   });
 
   return (
-    <View style={{ width: courtW, height: courtH, backgroundColor: '#1a2a1a', borderRadius: 14, overflow: 'hidden', borderWidth: 1, borderColor: '#2e4a2e' }}>
+    <View style={{ width: courtW, height: courtH, backgroundColor: '#2c2c2c', borderRadius: 12, overflow: 'hidden' }}>
       <Svg width={courtW} height={courtH} style={{ position: 'absolute' }}>
         {/* Court border */}
-        <Rect x={2} y={2} width={courtW-4} height={courtH-4} stroke="#2e4a2e" strokeWidth={1.5} fill="none" rx={12} />
+        <Rect x={2} y={2} width={courtW-4} height={courtH-4} stroke="#3a3a3a" strokeWidth={1.5} fill="none" rx={12} />
         {/* Baseline */}
-        <Line x1={0} y1={courtH-1} x2={courtW} y2={courtH-1} stroke="#2e4a2e" strokeWidth={1.5} />
+        <Line x1={0} y1={courtH-1} x2={courtW} y2={courtH-1} stroke="#3a3a3a" strokeWidth={1.5} />
         {/* Paint */}
-        <Rect x={courtW*0.29} y={0} width={courtW*0.42} height={courtH*0.36} stroke="#2e4a2e" strokeWidth={1.5} fill="rgba(255,255,255,0.02)" />
+        <Rect x={courtW*0.29} y={0} width={courtW*0.42} height={courtH*0.36} stroke="#3a3a3a" strokeWidth={1.5} fill="rgba(255,255,255,0.02)" />
         {/* Free-throw circle */}
-        <Circle cx={courtW*0.5} cy={courtH*0.36} r={courtW*0.13} stroke="#2e4a2e" strokeWidth={1.5} fill="none" />
+        <Circle cx={courtW*0.5} cy={courtH*0.36} r={courtW*0.13} stroke="#3a3a3a" strokeWidth={1.5} fill="none" />
         {/* Basket */}
         <Circle cx={courtW*0.5} cy={courtH*0.06} r={courtW*0.025} stroke="#5a8a5a" strokeWidth={1.5} fill="none" />
         {/* Restricted area arc */}
         <Path
           d={`M ${courtW*0.425} ${courtH*0.06} A ${courtW*0.075} ${courtW*0.075} 0 0 0 ${courtW*0.575} ${courtH*0.06}`}
-          stroke="#2e4a2e" strokeWidth={1.5} fill="none"
+          stroke="#3a3a3a" strokeWidth={1.5} fill="none"
         />
         {/* Three-point arc */}
         <Path
           d={`M ${courtW*0.09} 0 L ${courtW*0.09} ${courtH*0.38} A ${courtW*0.43} ${courtW*0.43} 0 0 0 ${courtW*0.91} ${courtH*0.38} L ${courtW*0.91} 0`}
-          stroke="#2e4a2e" strokeWidth={1.5} fill="none"
+          stroke="#3a3a3a" strokeWidth={1.5} fill="none"
         />
       </Svg>
       {assigned.map(({ player, x, y }) => (
@@ -221,8 +221,7 @@ function OverviewTab({ teamKey, standing, allStandings }: {
   const [starters, setStarters]       = useState<any[]>([]);
   const [nbaIdMap, setNbaIdMap]       = useState<Record<number,number>>({});
   const [loading, setLoading]         = useState(true);
-  const [statsOrLineup, setStatsOrLineup] = useState<'stats' | 'lineup'>('stats');
-  const [statsView, setStatsView]         = useState<'regular' | 'playoffs'>('regular');
+  const [statsView, setStatsView] = useState<'regular' | 'playoffs'>('regular');
 
   useEffect(() => {
     NBAService.getTeamSchedule(teamKey)
@@ -348,116 +347,98 @@ function OverviewTab({ teamKey, standing, allStandings }: {
         )}
       </View>
 
-      {/* ── Season Stats / Last Starting 5 ── */}
+      {/* ── Season Stats ── */}
       <View style={s.card}>
-        {/* Toggle — same chip style used across the app */}
-        <View style={s.segRow}>
-          {(['stats', 'lineup'] as const).map(tab => (
-            <TouchableOpacity
-              key={tab}
-              style={[s.segChip, statsOrLineup === tab && s.segChipActive]}
-              onPress={() => setStatsOrLineup(tab)}
-            >
-              <Text style={[s.segChipText, statsOrLineup === tab && s.segChipTextActive]}>
-                {tab === 'stats' ? 'Season Stats' : 'Last Starting 5'}
-              </Text>
-            </TouchableOpacity>
-          ))}
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Text style={s.sectionLabel}>Season Stats</Text>
+          {playoffStats && (
+            <View style={[s.segRow, { gap: 6 }]}>
+              {(['regular', 'playoffs'] as const).map(v => (
+                <TouchableOpacity
+                  key={v}
+                  style={[s.segChip, { paddingHorizontal: 10, paddingVertical: 5 }, statsView === v && s.segChipActive]}
+                  onPress={() => setStatsView(v)}
+                >
+                  <Text style={[s.segChipText, { fontSize: 11 }, statsView === v && s.segChipTextActive]}>
+                    {v === 'regular' ? 'Regular' : 'Playoffs'}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
         </View>
-
-        {statsOrLineup === 'stats' ? (
-          loading ? (
-            <ActivityIndicator color="#fff" style={{ marginVertical: 24 }} />
-          ) : (
-            <>
-              {/* Regular / Playoffs toggle */}
-              {playoffStats && (
-                <View style={[s.segRow, { marginTop: 12, gap: 6 }]}>
-                  {(['regular', 'playoffs'] as const).map(v => (
-                    <TouchableOpacity
-                      key={v}
-                      style={[s.segChip, { paddingHorizontal: 10, paddingVertical: 5 }, statsView === v && s.segChipActive]}
-                      onPress={() => setStatsView(v)}
-                    >
-                      <Text style={[s.segChipText, { fontSize: 11 }, statsView === v && s.segChipTextActive]}>
-                        {v === 'regular' ? 'Regular Season' : 'Playoffs'}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
+        {loading ? (
+          <ActivityIndicator color="#fff" style={{ marginVertical: 24 }} />
+        ) : (() => {
+          const st = statsView === 'playoffs' ? playoffStats : seasonStats;
+          if (!st) return <Text style={[s.emptyText, { marginTop: 16 }]}>No stats available</Text>;
+          const winPct = statsView === 'regular' && standing
+            ? standing.Percentage.toFixed(3)
+            : st.gp > 0
+              ? ((parseInt(st.homeRec.split('-')[0]) + parseInt(st.awayRec.split('-')[0])) / st.gp).toFixed(3)
+              : '—';
+          const streak = statsView === 'regular' ? standing?.StreakDescription : null;
+          const isWStreak = streak?.startsWith('W');
+          return (
+            <View style={{ marginTop: 16, gap: 12 }}>
+              <View style={s.statGroupCard}>
+                <Text style={s.statGroupLabel}>Scoring</Text>
+                <View style={s.statRow3}>
+                  <View style={s.statCell}>
+                    <Text style={s.statNum}>{st.ppg}</Text>
+                    <Text style={s.statLabel}>PPG</Text>
+                  </View>
+                  <View style={[s.statCell, s.statCellBorder]}>
+                    <Text style={[s.statNum, { color: '#e05a5a' }]}>{st.oppPpg}</Text>
+                    <Text style={s.statLabel}>OPP PPG</Text>
+                  </View>
+                  <View style={[s.statCell, s.statCellBorder]}>
+                    <Text style={[s.statNum, { color: '#aaa', fontSize: 16 }]}>{st.gp}</Text>
+                    <Text style={s.statLabel}>GP</Text>
+                  </View>
+                </View>
+              </View>
+              <View style={s.statGroupCard}>
+                <Text style={s.statGroupLabel}>Record</Text>
+                <View style={s.statRow3}>
+                  <View style={s.statCell}>
+                    <Text style={s.statNum}>{st.homeRec}</Text>
+                    <Text style={s.statLabel}>Home</Text>
+                  </View>
+                  <View style={[s.statCell, s.statCellBorder]}>
+                    <Text style={s.statNum}>{st.awayRec}</Text>
+                    <Text style={s.statLabel}>Away</Text>
+                  </View>
+                  <View style={[s.statCell, s.statCellBorder]}>
+                    <Text style={s.statNum}>{winPct}</Text>
+                    <Text style={s.statLabel}>Win%</Text>
+                  </View>
+                </View>
+              </View>
+              {streak && (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  <Text style={s.statGroupLabel}>Streak</Text>
+                  <View style={[s.streakBadge, { backgroundColor: isWStreak ? '#1a3a1a' : '#3a1a1a', borderColor: isWStreak ? '#4caf50' : '#e05a5a' }]}>
+                    <Text style={[s.streakBadgeText, { color: isWStreak ? '#4caf50' : '#e05a5a' }]}>{streak}</Text>
+                  </View>
                 </View>
               )}
-              {(() => {
-                const st = statsView === 'playoffs' ? playoffStats : seasonStats;
-                if (!st) return <Text style={[s.emptyText, { marginTop: 16 }]}>No stats available</Text>;
-                const winPct = statsView === 'regular' && standing
-                  ? standing.Percentage.toFixed(3)
-                  : st.gp > 0
-                    ? ((parseInt(st.homeRec.split('-')[0]) + parseInt(st.awayRec.split('-')[0])) / st.gp).toFixed(3)
-                    : '—';
-                const streak = statsView === 'regular' ? standing?.StreakDescription : null;
-                const isWStreak = streak?.startsWith('W');
-                return (
-                  <View style={{ marginTop: 16, gap: 12 }}>
-                    {/* Scoring row */}
-                    <View style={s.statGroupCard}>
-                      <Text style={s.statGroupLabel}>Scoring</Text>
-                      <View style={s.statRow3}>
-                        <View style={s.statCell}>
-                          <Text style={s.statNum}>{st.ppg}</Text>
-                          <Text style={s.statLabel}>PPG</Text>
-                        </View>
-                        <View style={[s.statCell, s.statCellBorder]}>
-                          <Text style={[s.statNum, { color: '#e05a5a' }]}>{st.oppPpg}</Text>
-                          <Text style={s.statLabel}>OPP PPG</Text>
-                        </View>
-                        <View style={[s.statCell, s.statCellBorder]}>
-                          <Text style={[s.statNum, { color: '#aaa', fontSize: 16 }]}>{st.gp}</Text>
-                          <Text style={s.statLabel}>GP</Text>
-                        </View>
-                      </View>
-                    </View>
-                    {/* Record row */}
-                    <View style={s.statGroupCard}>
-                      <Text style={s.statGroupLabel}>Record</Text>
-                      <View style={s.statRow3}>
-                        <View style={s.statCell}>
-                          <Text style={s.statNum}>{st.homeRec}</Text>
-                          <Text style={s.statLabel}>Home</Text>
-                        </View>
-                        <View style={[s.statCell, s.statCellBorder]}>
-                          <Text style={s.statNum}>{st.awayRec}</Text>
-                          <Text style={s.statLabel}>Away</Text>
-                        </View>
-                        <View style={[s.statCell, s.statCellBorder]}>
-                          <Text style={s.statNum}>{winPct}</Text>
-                          <Text style={s.statLabel}>Win%</Text>
-                        </View>
-                      </View>
-                    </View>
-                    {/* Streak badge */}
-                    {streak && (
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                        <Text style={s.statGroupLabel}>Streak</Text>
-                        <View style={[s.streakBadge, { backgroundColor: isWStreak ? '#1a3a1a' : '#3a1a1a', borderColor: isWStreak ? '#4caf50' : '#e05a5a' }]}>
-                          <Text style={[s.streakBadgeText, { color: isWStreak ? '#4caf50' : '#e05a5a' }]}>{streak}</Text>
-                        </View>
-                      </View>
-                    )}
-                  </View>
-                );
-              })()}
-            </>
-          )
-        ) : (
-          loading ? (
-            <ActivityIndicator color="#fff" style={{ marginVertical: 24 }} />
-          ) : starters.length > 0 ? (
-            <View style={{ marginTop: 12, alignItems: 'center' }}>
-              <HalfCourt starters={starters} nbaIdMap={nbaIdMap} />
             </View>
-          ) : (
-            <Text style={[s.emptyText, { marginTop: 16 }]}>No lineup data</Text>
-          )
+          );
+        })()}
+      </View>
+
+      {/* ── Last Starting 5 ── */}
+      <View style={s.card}>
+        <Text style={s.sectionLabel}>Last Starting 5</Text>
+        {loading ? (
+          <ActivityIndicator color="#fff" style={{ marginVertical: 24 }} />
+        ) : starters.length > 0 ? (
+          <View style={{ marginTop: 12, alignItems: 'center' }}>
+            <HalfCourt starters={starters} nbaIdMap={nbaIdMap} />
+          </View>
+        ) : (
+          <Text style={[s.emptyText, { marginTop: 16 }]}>No lineup data</Text>
         )}
       </View>
 
