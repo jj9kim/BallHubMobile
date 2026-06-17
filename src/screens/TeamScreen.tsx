@@ -117,7 +117,7 @@ function StarterPin({ player, x, y, courtW, courtH, nbaIdMap }: {
         </View>
       </View>
       {/* Name pill */}
-      <View style={{ marginTop: 4, backgroundColor: 'rgba(0,0,0,0.72)', borderRadius: 6, paddingHorizontal: 5, paddingVertical: 2, width: 72 }}>
+      <View style={{ marginTop: 4, backgroundColor: 'rgba(0,0,0,0.72)', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2, maxWidth: 80 }}>
         <Text style={{ color: '#fff', fontSize: 9, fontWeight: '700', letterSpacing: 0.3 }} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
           {lastName}
         </Text>
@@ -127,7 +127,7 @@ function StarterPin({ player, x, y, courtW, courtH, nbaIdMap }: {
 }
 
 function HalfCourt({ starters, nbaIdMap }: { starters: any[]; nbaIdMap: Record<number,number> }) {
-  const courtW = Dimensions.get('window').width - 16;
+  const courtW = Dimensions.get('window').width - 36;
   const courtH = courtW * 0.85;
   const POS_ORDER_LOCAL = ['C','PF','SF','SG','PG'];
 
