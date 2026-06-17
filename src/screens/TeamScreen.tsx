@@ -95,7 +95,7 @@ function StarterPin({ player, x, y, courtW, courtH, nbaIdMap }: {
 
   return (
     <TouchableOpacity
-      style={{ position: 'absolute', left: left - 50, top: top - 32, alignItems: 'center', width: 100 }}
+      style={{ position: 'absolute', left: left - 60, top: top - 32, alignItems: 'center', width: 120 }}
       onPress={() => playerId && navigation.navigate('PlayerProfile', { playerId })}
       activeOpacity={playerId ? 0.7 : 1}
     >
