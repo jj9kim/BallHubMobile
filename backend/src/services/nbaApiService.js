@@ -1336,10 +1336,14 @@ async function getNbaGameLogs(season, playerId) {
     PlayerEfficiencyRating: 0, DoubleDoubles: 0, TripleDoubles: 0,
   });
 
+  // Past seasons never change — cache forever. Current season refreshes daily.
+  const isCurrentSeason = season === CURRENT_SEASON_YEAR - 1;
+  const logTtl = isCurrentSeason ? TTL_SEASON : TTL_FOREVER;
+
   const [regularData, playoffData, playInData] = await Promise.allSettled([
-    nbFetch('/stats/playergamelog', { PlayerID: playerId, Season: seasonStr, SeasonType: 'Regular Season' }, 3600, `gamelogs_nba_${playerId}_${season}`),
-    nbFetch('/stats/playergamelog', { PlayerID: playerId, Season: seasonStr, SeasonType: 'Playoffs' }, 86400, `gamelogs_playoff_${playerId}_${season}`),
-    nbFetch('/stats/playergamelog', { PlayerID: playerId, Season: seasonStr, SeasonType: 'PlayIn' }, 86400, `gamelogs_playin_${playerId}_${season}`),
+    nbFetch('/stats/playergamelog', { PlayerID: playerId, Season: seasonStr, SeasonType: 'Regular Season' }, logTtl, `gamelogs_nba_${playerId}_${season}`),
+    nbFetch('/stats/playergamelog', { PlayerID: playerId, Season: seasonStr, SeasonType: 'Playoffs' }, logTtl, `gamelogs_playoff_${playerId}_${season}`),
+    nbFetch('/stats/playergamelog', { PlayerID: playerId, Season: seasonStr, SeasonType: 'PlayIn' }, logTtl, `gamelogs_playin_${playerId}_${season}`),
   ]);
 
   const regular  = regularData.status  === 'fulfilled' ? parseRS(regularData.value.resultSets,  'PlayerGameLog').map(r => mapRow(r, false)) : [];
@@ -1353,27 +1357,37 @@ async function getNbaGameLogs(season, playerId) {
 // ── Player season stats ───────────────────────────────────────────────────────
 
 export async function getPlayerSeasonStats(season, playerId) {
-  // Try NBA API first (cached); if unavailable, compute from game logs
-  const seasonStr = toSeasonStr(parseInt(season));
-  const cacheKey  = `seasonstats_all_${season}`;
+  season = parseInt(season);
+  const perPlayerKey = `seasonstats_${playerId}_${season}`;
 
+  // Check per-player cache first — avoids re-computing from game logs every time
+  const cached = readDisk(perPlayerKey);
+  if (cached !== undefined) return cached;
+
+  const seasonStr = toSeasonStr(season);
+
+  // Try NBA league-wide stats API (one call covers all players)
   try {
     const data = await nbFetch('/stats/leaguedashplayerstats', {
       Season: seasonStr, SeasonType: 'Regular Season',
       PerMode: 'PerGame', LeagueID: '00',
-    }, 3600, cacheKey);
+    }, TTL_SEASON, `seasonstats_all_${season}`);
     const rows = parseRS(data.resultSets, 'LeagueDashPlayerStats');
     const r = rows.find(p => p.PLAYER_ID === Number(playerId));
-    if (r) return {
-      PlayerID: Number(playerId), Season: Number(season),
-      Games: r.GP ?? 0, Minutes: r.MIN ?? 0,
-      Points: r.PTS ?? 0, Rebounds: r.REB ?? 0, Assists: r.AST ?? 0,
-      Steals: r.STL ?? 0, BlockedShots: r.BLK ?? 0, Turnovers: r.TOV ?? 0,
-      FieldGoalsPercentage: r.FG_PCT ?? 0, ThreePointersPercentage: r.FG3_PCT ?? 0,
-      FreeThrowsPercentage: r.FT_PCT ?? 0, TrueShootingPercentage: 0,
-      PlayerEfficiencyRating: 0, UsageRatePercentage: 0,
-      PlusMinus: r.PLUS_MINUS ?? 0, DoubleDoubles: r.DD2 ?? 0, TripleDoubles: r.TD3 ?? 0,
-    };
+    if (r) {
+      const result = {
+        PlayerID: Number(playerId), Season: season,
+        Games: r.GP ?? 0, Minutes: r.MIN ?? 0,
+        Points: r.PTS ?? 0, Rebounds: r.REB ?? 0, Assists: r.AST ?? 0,
+        Steals: r.STL ?? 0, BlockedShots: r.BLK ?? 0, Turnovers: r.TOV ?? 0,
+        FieldGoalsPercentage: r.FG_PCT ?? 0, ThreePointersPercentage: r.FG3_PCT ?? 0,
+        FreeThrowsPercentage: r.FT_PCT ?? 0, TrueShootingPercentage: 0,
+        PlayerEfficiencyRating: 0, UsageRatePercentage: 0,
+        PlusMinus: r.PLUS_MINUS ?? 0, DoubleDoubles: r.DD2 ?? 0, TripleDoubles: r.TD3 ?? 0,
+      };
+      writeDisk(perPlayerKey, result, TTL_SEASON);
+      return result;
+    }
   } catch {}
 
   // Fallback: compute averages from regular season game logs only
@@ -1389,8 +1403,8 @@ export async function getPlayerSeasonStats(season, playerId) {
   const ftm = logs.reduce((s, g) => s + (g.FreeThrowsMade ?? 0), 0);
   const fta = logs.reduce((s, g) => s + (g.FreeThrowsAttempted ?? 0), 0);
 
-  return {
-    PlayerID: Number(playerId), Season: Number(season),
+  const result = {
+    PlayerID: Number(playerId), Season: season,
     Games:    logs.length,
     Minutes:  avg('Minutes'),
     Points:   avg('Points'),   Rebounds: avg('Rebounds'), Assists: avg('Assists'),
@@ -1401,6 +1415,11 @@ export async function getPlayerSeasonStats(season, playerId) {
     TrueShootingPercentage:  0, PlayerEfficiencyRating: 0, UsageRatePercentage: 0,
     PlusMinus: avg('PlusMinus'), DoubleDoubles: 0, TripleDoubles: 0,
   };
+
+  // Cache per-player: past seasons are permanent, current season refreshes daily
+  const isCurrentSeason = season === CURRENT_SEASON_YEAR - 1;
+  writeDisk(perPlayerKey, result, isCurrentSeason ? TTL_SEASON : TTL_FOREVER);
+  return result;
 }
 
 export async function getPlayerPlayoffStats(season, playerId) {
@@ -1477,7 +1496,8 @@ export async function getPlayerCareerStats(playerId) {
       };
     }).sort((a, b) => a.SeasonYear - b.SeasonYear);
 
-    writeDisk(cacheKey, seasons, seasons.length > 0 ? 3600 : 300);
+    const ttl = isRetiredFromCareer(seasons) ? TTL_FOREVER : TTL_CAREER;
+    writeDisk(cacheKey, seasons, ttl);
     return seasons;
   } catch {
     return [];
@@ -1485,6 +1505,20 @@ export async function getPlayerCareerStats(playerId) {
 }
 
 // ── NBA ID map ────────────────────────────────────────────────────────────────
+// ── Retired vs active TTL helper ─────────────────────────────────────────────
+// Current season end year (2025-26 → 2026). Update each season.
+const CURRENT_SEASON_YEAR = 2026;
+const TTL_FOREVER  = 86400 * 365 * 10; // 10 years — effectively permanent
+const TTL_BIO      = 86400 * 30;       // 30 days for active player bio
+const TTL_CAREER   = 86400 * 7;        // 7 days for active career stats
+const TTL_SEASON   = 86400;            // 1 day for active season stats / game logs
+
+function isRetiredFromCareer(seasons) {
+  if (!seasons?.length) return false;
+  const lastYear = Math.max(...seasons.map(s => s.SeasonYear ?? 0));
+  return lastYear < CURRENT_SEASON_YEAR;
+}
+
 // ── Draft history ─────────────────────────────────────────────────────────────
 
 // Reverse ESPN team ID → app abbreviation
