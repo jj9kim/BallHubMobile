@@ -86,21 +86,18 @@ function StarterPin({ player, x, y, courtW, courtH, nbaIdMap }: {
 }) {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [failed, setFailed] = useState(false);
-  const left     = (x / 100) * courtW;
-  const top      = (y / 100) * courtH;
-  const nbaid    = nbaIdMap[player.PlayerID];
-  const uri      = nbaid ? `https://cdn.nba.com/headshots/nba/latest/1040x760/${nbaid}.png` : player.PhotoUrl;
-  const playerId = nbaid ?? player.PlayerID;
-  const pos      = (player.Position ?? '').toUpperCase();
+  const left      = (x / 100) * courtW;
+  const top       = (y / 100) * courtH;
+  const uri       = player.PhotoUrl;
+  const playerId  = player.PlayerID;  // already resolved to roster ID (or null if no match)
   const teamColor = teamColors[player.Team] ?? '#555';
-
-  const lastName = player.LastName ?? player.Name?.split(' ').pop() ?? '?';
+  const lastName  = player.LastName ?? player.Name?.split(' ').pop() ?? '?';
 
   return (
     <TouchableOpacity
-      style={{ position: 'absolute', left: left - 28, top: top - 32, alignItems: 'center', width: 56 }}
+      style={{ position: 'absolute', left: left - 36, top: top - 32, alignItems: 'center', width: 72 }}
       onPress={() => playerId && navigation.navigate('PlayerProfile', { playerId })}
-      activeOpacity={0.7}
+      activeOpacity={playerId ? 0.7 : 1}
     >
       {/* Outer glow ring */}
       <View style={{
@@ -120,7 +117,7 @@ function StarterPin({ player, x, y, courtW, courtH, nbaIdMap }: {
         </View>
       </View>
       {/* Name pill */}
-      <View style={{ marginTop: 4, backgroundColor: 'rgba(0,0,0,0.72)', borderRadius: 6, paddingHorizontal: 5, paddingVertical: 2 }}>
+      <View style={{ marginTop: 4, backgroundColor: 'rgba(0,0,0,0.72)', borderRadius: 6, paddingHorizontal: 5, paddingVertical: 2, maxWidth: 72 }}>
         <Text style={{ color: '#fff', fontSize: 9, fontWeight: '700', letterSpacing: 0.3 }} numberOfLines={1}>
           {lastName}
         </Text>
@@ -239,15 +236,16 @@ function OverviewTab({ teamKey, standing, allStandings }: {
           const teamStarters = players.filter(p => ourVariants.has(p.Team) && p.Started === 1);
 
           // Build name→SportsData PlayerID map from roster so tapping navigates correctly
-          const normalize = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+          // Strip everything except letters/digits so apostrophe/hyphen variants match
+          const normalize = (s: string) => s.toLowerCase().normalize('NFD').replace(/[^a-z0-9]/g, '');
           const nameToId: Record<string, number> = {};
           (rosterRes.players ?? []).forEach((p: Player) => {
             nameToId[normalize(`${p.FirstName} ${p.LastName}`)] = p.PlayerID;
           });
           // Attach the correct PlayerID to each starter
           const startersWithId = teamStarters.map(p => {
-            const id = nameToId[normalize(p.Name ?? '')] ?? p.PlayerID;
-            return { ...p, PlayerID: id };
+            const id = nameToId[normalize(p.Name ?? '')] ?? null;
+            return { ...p, PlayerID: id };  // null = no valid ID, pin won't navigate
           });
 
           setStarters(startersWithId);
