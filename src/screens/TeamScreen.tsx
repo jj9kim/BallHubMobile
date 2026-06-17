@@ -117,8 +117,8 @@ function StarterPin({ player, x, y, courtW, courtH, nbaIdMap }: {
         </View>
       </View>
       {/* Name pill */}
-      <View style={{ marginTop: 4, backgroundColor: 'rgba(0,0,0,0.72)', borderRadius: 6, paddingHorizontal: 5, paddingVertical: 2, maxWidth: 72 }}>
-        <Text style={{ color: '#fff', fontSize: 9, fontWeight: '700', letterSpacing: 0.3 }} numberOfLines={1}>
+      <View style={{ marginTop: 4, backgroundColor: 'rgba(0,0,0,0.72)', borderRadius: 6, paddingHorizontal: 5, paddingVertical: 2, width: 72 }}>
+        <Text style={{ color: '#fff', fontSize: 9, fontWeight: '700', letterSpacing: 0.3 }} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
           {lastName}
         </Text>
       </View>
