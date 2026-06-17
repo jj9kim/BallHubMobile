@@ -348,23 +348,19 @@ function OverviewTab({ teamKey, standing, allStandings }: {
       </View>
 
       {/* ── Season Stats ── */}
+      {/* ── Season Stats ── */}
       <View style={s.card}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Text style={s.sectionLabel}>Season Stats</Text>
+          <Text style={s.sectionLabel}>{statsView === 'playoffs' ? 'Playoff Stats' : 'Season Stats'}</Text>
           {playoffStats && (
-            <View style={[s.segRow, { gap: 6 }]}>
-              {(['regular', 'playoffs'] as const).map(v => (
-                <TouchableOpacity
-                  key={v}
-                  style={[s.segChip, { paddingHorizontal: 10, paddingVertical: 5 }, statsView === v && s.segChipActive]}
-                  onPress={() => setStatsView(v)}
-                >
-                  <Text style={[s.segChipText, { fontSize: 11 }, statsView === v && s.segChipTextActive]}>
-                    {v === 'regular' ? 'Regular' : 'Playoffs'}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+            <TouchableOpacity
+              onPress={() => setStatsView(v => v === 'regular' ? 'playoffs' : 'regular')}
+              style={[s.toggleBtn, statsView === 'playoffs' && s.toggleBtnActive]}
+            >
+              <Text style={[s.toggleBtnText, statsView === 'playoffs' && s.toggleBtnTextActive]}>
+                {statsView === 'playoffs' ? 'Regular Season' : 'Playoffs'}
+              </Text>
+            </TouchableOpacity>
           )}
         </View>
         {loading ? (
@@ -380,48 +376,43 @@ function OverviewTab({ teamKey, standing, allStandings }: {
           const streak = statsView === 'regular' ? standing?.StreakDescription : null;
           const isWStreak = streak?.startsWith('W');
           return (
-            <View style={{ marginTop: 16, gap: 12 }}>
-              <View style={s.statGroupCard}>
-                <Text style={s.statGroupLabel}>Scoring</Text>
-                <View style={s.statRow3}>
-                  <View style={s.statCell}>
-                    <Text style={s.statNum}>{st.ppg}</Text>
-                    <Text style={s.statLabel}>PPG</Text>
+            <View style={{ marginTop: 14 }}>
+              {/* Big 3 */}
+              <View style={{ flexDirection: 'row', marginBottom: 4 }}>
+                {[
+                  { val: st.ppg,    label: 'PPG' },
+                  { val: st.oppPpg, label: 'OPP PPG' },
+                  { val: String(st.gp), label: 'GP' },
+                ].map(({ val, label }, i) => (
+                  <View key={label} style={[s.bigStatBox, i > 0 && { borderLeftWidth: 1, borderLeftColor: '#2a2a2a' }]}>
+                    <Text style={[s.bigStatVal, label === 'OPP PPG' && { color: '#e05a5a' }, label === 'GP' && { color: '#aaa', fontSize: 22 }]}>{val}</Text>
+                    <Text style={s.bigStatLbl}>{label}</Text>
                   </View>
-                  <View style={[s.statCell, s.statCellBorder]}>
-                    <Text style={[s.statNum, { color: '#e05a5a' }]}>{st.oppPpg}</Text>
-                    <Text style={s.statLabel}>OPP PPG</Text>
-                  </View>
-                  <View style={[s.statCell, s.statCellBorder]}>
-                    <Text style={[s.statNum, { color: '#aaa', fontSize: 16 }]}>{st.gp}</Text>
-                    <Text style={s.statLabel}>GP</Text>
-                  </View>
-                </View>
+                ))}
               </View>
-              <View style={s.statGroupCard}>
-                <Text style={s.statGroupLabel}>Record</Text>
-                <View style={s.statRow3}>
-                  <View style={s.statCell}>
-                    <Text style={s.statNum}>{st.homeRec}</Text>
-                    <Text style={s.statLabel}>Home</Text>
-                  </View>
-                  <View style={[s.statCell, s.statCellBorder]}>
-                    <Text style={s.statNum}>{st.awayRec}</Text>
-                    <Text style={s.statLabel}>Away</Text>
-                  </View>
-                  <View style={[s.statCell, s.statCellBorder]}>
-                    <Text style={s.statNum}>{winPct}</Text>
-                    <Text style={s.statLabel}>Win%</Text>
-                  </View>
-                </View>
+              <View style={s.divider} />
+              <View style={s.psRow}>
+                <Text style={s.psLabel}>Home</Text>
+                <Text style={s.psValue}>{st.homeRec}</Text>
+              </View>
+              <View style={s.divider} />
+              <View style={s.psRow}>
+                <Text style={s.psLabel}>Away</Text>
+                <Text style={s.psValue}>{st.awayRec}</Text>
+              </View>
+              <View style={s.divider} />
+              <View style={s.psRow}>
+                <Text style={s.psLabel}>Win %</Text>
+                <Text style={s.psValue}>{winPct}</Text>
               </View>
               {streak && (
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                  <Text style={s.statGroupLabel}>Streak</Text>
-                  <View style={[s.streakBadge, { backgroundColor: isWStreak ? '#1a3a1a' : '#3a1a1a', borderColor: isWStreak ? '#4caf50' : '#e05a5a' }]}>
-                    <Text style={[s.streakBadgeText, { color: isWStreak ? '#4caf50' : '#e05a5a' }]}>{streak}</Text>
+                <>
+                  <View style={s.divider} />
+                  <View style={s.psRow}>
+                    <Text style={s.psLabel}>Streak</Text>
+                    <Text style={[s.psValue, { color: isWStreak ? '#4caf50' : '#e05a5a' }]}>{streak}</Text>
                   </View>
-                </View>
+                </>
               )}
             </View>
           );
@@ -434,8 +425,20 @@ function OverviewTab({ teamKey, standing, allStandings }: {
         {loading ? (
           <ActivityIndicator color="#fff" style={{ marginVertical: 24 }} />
         ) : starters.length > 0 ? (
-          <View style={{ marginTop: 12, alignItems: 'center' }}>
-            <HalfCourt starters={starters} nbaIdMap={nbaIdMap} />
+          <View style={{ marginTop: 14 }}>
+            {starters.map((p, i) => {
+              const pos = (p.Position ?? '').toUpperCase();
+              return (
+                <View key={p.PlayerID}>
+                  {i > 0 && <View style={s.divider} />}
+                  <View style={s.psRow}>
+                    <Text style={[s.psLabel, { width: 28 }]}>{pos || '—'}</Text>
+                    <Text style={[s.psValue, { flex: 1, textAlign: 'left', marginLeft: 8 }]}>{p.Name ?? `${p.FirstName} ${p.LastName}`}</Text>
+                    {p.Jersey ? <Text style={s.psLabel}>#{p.Jersey}</Text> : null}
+                  </View>
+                </View>
+              );
+            })}
           </View>
         ) : (
           <Text style={[s.emptyText, { marginTop: 16 }]}>No lineup data</Text>
@@ -1141,24 +1144,19 @@ const s = StyleSheet.create({
   atLabel:        { color: '#555', fontSize: 11, fontWeight: '600' },
   matchDateText:  { color: '#555', fontSize: 12, fontWeight: '500' },
 
-  // ── season stats / lineup toggle ─────────────────────────────────────────────
-  segRow:         { flexDirection: 'row', gap: 8 },
-  segChip:        { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, backgroundColor: '#242424' },
-  segChipActive:  { backgroundColor: '#fff' },
-  segChipText:    { color: '#777', fontSize: 13, fontWeight: '500' },
-  segChipTextActive: { color: '#000', fontWeight: '700' },
+  // ── season stats / lineup (PlayerScreen-matched) ─────────────────────────────
+  toggleBtn:          { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, backgroundColor: '#242424' },
+  toggleBtnActive:    { backgroundColor: '#fff' },
+  toggleBtnText:      { color: '#777', fontSize: 11, fontWeight: '600' },
+  toggleBtnTextActive:{ color: '#000', fontWeight: '700' },
 
-  statNum:        { color: '#fff', fontSize: 18, fontWeight: '700' },
-  statLabel:      { color: '#555', fontSize: 11, fontWeight: '500', marginTop: 3, textTransform: 'uppercase', letterSpacing: 0.4 },
+  bigStatBox:     { flex: 1, alignItems: 'center', paddingVertical: 12 },
+  bigStatVal:     { color: '#fff', fontSize: 26, fontWeight: '800' },
+  bigStatLbl:     { color: '#555', fontSize: 11, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 2 },
 
-  statGroupCard:  { backgroundColor: '#1c1c1c', borderRadius: 10, padding: 12, borderWidth: 1, borderColor: '#2a2a2a' },
-  statGroupLabel: { color: '#444', fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 10 },
-  statRow3:       { flexDirection: 'row' },
-  statCell:       { flex: 1, alignItems: 'center' },
-  statCellBorder: { borderLeftWidth: 1, borderLeftColor: '#2a2a2a' },
-
-  streakBadge:    { borderRadius: 8, borderWidth: 1.5, paddingHorizontal: 10, paddingVertical: 4 },
-  streakBadgeText:{ fontSize: 13, fontWeight: '800', letterSpacing: 0.3 },
+  psRow:          { flexDirection: 'row', alignItems: 'center', paddingVertical: 10 },
+  psLabel:        { flex: 1, color: '#aaa', fontSize: 14, fontWeight: '500' },
+  psValue:        { color: '#fff', fontSize: 14, fontWeight: '700' },
 
   // ── standings ────────────────────────────────────────────────────────────────
   standRow:           { flexDirection: 'row', alignItems: 'center' },
