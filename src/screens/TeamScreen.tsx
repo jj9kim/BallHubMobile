@@ -91,7 +91,9 @@ function StarterPin({ player, x, y, courtW, courtH, nbaIdMap }: {
   const uri       = player.PhotoUrl;
   const playerId  = player.PlayerID;  // already resolved to roster ID (or null if no match)
   const teamColor = teamColors[player.Team] ?? '#555';
-  const lastName  = player.LastName ?? player.Name?.split(' ').pop() ?? '?';
+  const nameParts = (player.Name ?? `${player.FirstName ?? ''} ${player.LastName ?? ''}`).trim().split(' ');
+  const rawLast   = nameParts[nameParts.length - 1] ?? '?';
+  const displayName = rawLast.length > 11 ? (nameParts[0] ?? rawLast) : rawLast;
 
   return (
     <TouchableOpacity
@@ -118,8 +120,8 @@ function StarterPin({ player, x, y, courtW, courtH, nbaIdMap }: {
       </View>
       {/* Name pill */}
       <View style={{ marginTop: 4, backgroundColor: 'rgba(0,0,0,0.72)', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2, maxWidth: 80 }}>
-        <Text style={{ color: '#fff', fontSize: 9, fontWeight: '700', letterSpacing: 0.3 }} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
-          {lastName}
+        <Text style={{ color: '#fff', fontSize: 9, fontWeight: '700', letterSpacing: 0.3 }}>
+          {displayName}
         </Text>
       </View>
     </TouchableOpacity>
@@ -149,7 +151,7 @@ function HalfCourt({ starters, nbaIdMap }: { starters: any[]; nbaIdMap: Record<n
   });
 
   return (
-    <View style={{ width: courtW, height: courtH, backgroundColor: '#2c2c2c', borderRadius: 12, overflow: 'hidden' }}>
+    <View style={{ width: courtW, height: courtH, backgroundColor: '#2c2c2c', borderRadius: 12, overflow: 'hidden', alignSelf: 'center' }}>
       <Svg width={courtW} height={courtH} style={{ position: 'absolute' }}>
         {/* Court border */}
         <Rect x={2} y={2} width={courtW-4} height={courtH-4} stroke="#3a3a3a" strokeWidth={1.5} fill="none" rx={12} />
