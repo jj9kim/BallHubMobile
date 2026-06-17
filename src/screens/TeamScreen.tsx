@@ -127,7 +127,7 @@ function StarterPin({ player, x, y, courtW, courtH, nbaIdMap }: {
 }
 
 function HalfCourt({ starters, nbaIdMap }: { starters: any[]; nbaIdMap: Record<number,number> }) {
-  const courtW = Dimensions.get('window').width - 48;
+  const courtW = Dimensions.get('window').width - 16;
   const courtH = courtW * 0.85;
   const POS_ORDER_LOCAL = ['C','PF','SF','SG','PG'];
 
@@ -419,7 +419,7 @@ function OverviewTab({ teamKey, standing, allStandings }: {
         {loading ? (
           <ActivityIndicator color="#fff" style={{ marginVertical: 24 }} />
         ) : starters.length > 0 ? (
-          <View style={{ marginTop: 14, alignItems: 'center' }}>
+          <View style={{ marginTop: 14, marginHorizontal: -14 }}>
             <HalfCourt starters={starters} nbaIdMap={nbaIdMap} />
           </View>
         ) : (
