@@ -91,13 +91,11 @@ function StarterPin({ player, x, y, courtW, courtH, nbaIdMap }: {
   const uri       = player.PhotoUrl;
   const playerId  = player.PlayerID;  // already resolved to roster ID (or null if no match)
   const teamColor = teamColors[player.Team] ?? '#555';
-  const nameParts = (player.Name ?? `${player.FirstName ?? ''} ${player.LastName ?? ''}`).trim().split(' ');
-  const rawLast   = nameParts[nameParts.length - 1] ?? '?';
-  const displayName = rawLast.length > 11 ? (nameParts[0] ?? rawLast) : rawLast;
+  const lastName = player.LastName ?? player.Name?.split(' ').pop() ?? '?';
 
   return (
     <TouchableOpacity
-      style={{ position: 'absolute', left: left - 36, top: top - 32, alignItems: 'center', width: 72 }}
+      style={{ position: 'absolute', left: left - 50, top: top - 32, alignItems: 'center', width: 100 }}
       onPress={() => playerId && navigation.navigate('PlayerProfile', { playerId })}
       activeOpacity={playerId ? 0.7 : 1}
     >
@@ -119,9 +117,9 @@ function StarterPin({ player, x, y, courtW, courtH, nbaIdMap }: {
         </View>
       </View>
       {/* Name pill */}
-      <View style={{ marginTop: 4, backgroundColor: 'rgba(0,0,0,0.72)', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2, maxWidth: 80 }}>
+      <View style={{ marginTop: 4, backgroundColor: 'rgba(0,0,0,0.72)', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
         <Text style={{ color: '#fff', fontSize: 9, fontWeight: '700', letterSpacing: 0.3 }}>
-          {displayName}
+          {lastName}
         </Text>
       </View>
     </TouchableOpacity>
