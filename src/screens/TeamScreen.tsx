@@ -425,20 +425,8 @@ function OverviewTab({ teamKey, standing, allStandings }: {
         {loading ? (
           <ActivityIndicator color="#fff" style={{ marginVertical: 24 }} />
         ) : starters.length > 0 ? (
-          <View style={{ marginTop: 14 }}>
-            {starters.map((p, i) => {
-              const pos = (p.Position ?? '').toUpperCase();
-              return (
-                <View key={p.PlayerID}>
-                  {i > 0 && <View style={s.divider} />}
-                  <View style={s.psRow}>
-                    <Text style={[s.psLabel, { width: 28 }]}>{pos || '—'}</Text>
-                    <Text style={[s.psValue, { flex: 1, textAlign: 'left', marginLeft: 8 }]}>{p.Name ?? `${p.FirstName} ${p.LastName}`}</Text>
-                    {p.Jersey ? <Text style={s.psLabel}>#{p.Jersey}</Text> : null}
-                  </View>
-                </View>
-              );
-            })}
+          <View style={{ marginTop: 14, alignItems: 'center' }}>
+            <HalfCourt starters={starters} nbaIdMap={nbaIdMap} />
           </View>
         ) : (
           <Text style={[s.emptyText, { marginTop: 16 }]}>No lineup data</Text>
