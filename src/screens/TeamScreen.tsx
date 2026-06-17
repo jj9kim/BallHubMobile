@@ -86,30 +86,42 @@ function StarterPin({ player, x, y, courtW, courtH, nbaIdMap }: {
 }) {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [failed, setFailed] = useState(false);
-  const left   = (x / 100) * courtW;
-  const top    = (y / 100) * courtH;
-  const nbaid  = nbaIdMap[player.PlayerID];
-  const uri    = nbaid ? `https://cdn.nba.com/headshots/nba/latest/1040x760/${nbaid}.png` : player.PhotoUrl;
+  const left     = (x / 100) * courtW;
+  const top      = (y / 100) * courtH;
+  const nbaid    = nbaIdMap[player.PlayerID];
+  const uri      = nbaid ? `https://cdn.nba.com/headshots/nba/latest/1040x760/${nbaid}.png` : player.PhotoUrl;
   const playerId = nbaid ?? player.PlayerID;
+  const pos      = (player.Position ?? '').toUpperCase();
+  const teamColor = teamColors[player.Team] ?? '#555';
 
   return (
     <TouchableOpacity
-      style={{ position: 'absolute', left: left - 22, top: top - 28, alignItems: 'center', width: 44 }}
+      style={{ position: 'absolute', left: left - 26, top: top - 34, alignItems: 'center', width: 52 }}
       onPress={() => playerId && navigation.navigate('PlayerProfile', { playerId })}
       activeOpacity={0.75}
     >
-      <View style={{ width: 38, height: 38, borderRadius: 19, overflow: 'hidden', borderWidth: 2, borderColor: '#fff', backgroundColor: '#333' }}>
+      {/* Avatar */}
+      <View style={{ width: 46, height: 46, borderRadius: 23, overflow: 'hidden', borderWidth: 2, borderColor: teamColor, backgroundColor: '#1e1e1e' }}>
         {!failed && uri ? (
           <Image source={{ uri }} style={{ width: '100%', height: '100%' }} resizeMode="cover" onError={() => setFailed(true)} />
         ) : (
-          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: teamColors[player.Team] ?? '#555' }}>
-            <Text style={{ color: '#fff', fontSize: 10, fontWeight: '800' }}>{player.LastName?.slice(0, 2)}</Text>
+          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: teamColor }}>
+            <Text style={{ color: '#fff', fontSize: 11, fontWeight: '800' }}>{player.LastName?.slice(0, 2).toUpperCase()}</Text>
           </View>
         )}
       </View>
-      <Text style={{ color: '#fff', fontSize: 8, fontWeight: '600', marginTop: 2 }} numberOfLines={1}>
-        #{player.Jersey} {player.LastName}
-      </Text>
+      {/* Position badge */}
+      {pos ? (
+        <View style={{ position: 'absolute', top: -4, right: 2, backgroundColor: teamColor, borderRadius: 4, paddingHorizontal: 3, paddingVertical: 1 }}>
+          <Text style={{ color: '#fff', fontSize: 7, fontWeight: '800' }}>{pos}</Text>
+        </View>
+      ) : null}
+      {/* Name */}
+      <View style={{ marginTop: 3, backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: 4, paddingHorizontal: 4, paddingVertical: 1.5 }}>
+        <Text style={{ color: '#fff', fontSize: 8.5, fontWeight: '700', letterSpacing: 0.2 }} numberOfLines={1}>
+          {player.LastName}
+        </Text>
+      </View>
     </TouchableOpacity>
   );
 }
@@ -137,15 +149,27 @@ function HalfCourt({ starters, nbaIdMap }: { starters: any[]; nbaIdMap: Record<n
   });
 
   return (
-    <View style={{ width: courtW, height: courtH, backgroundColor: '#2c2c2c', borderRadius: 12, overflow: 'hidden' }}>
+    <View style={{ width: courtW, height: courtH, backgroundColor: '#1a2a1a', borderRadius: 14, overflow: 'hidden', borderWidth: 1, borderColor: '#2e4a2e' }}>
       <Svg width={courtW} height={courtH} style={{ position: 'absolute' }}>
-        <Rect x={2} y={2} width={courtW-4} height={courtH-4} stroke="#3a3a3a" strokeWidth={2} fill="none" />
-        <Line x1={0} y1={courtH} x2={courtW} y2={courtH} stroke="#3a3a3a" strokeWidth={2} />
-        <Rect x={courtW*0.29} y={0} width={courtW*0.42} height={courtH*0.36} stroke="#3a3a3a" strokeWidth={2} fill="none" />
-        <Circle cx={courtW*0.5} cy={courtH*0.36} r={courtW*0.13} stroke="#3a3a3a" strokeWidth={2} fill="none" />
+        {/* Court border */}
+        <Rect x={2} y={2} width={courtW-4} height={courtH-4} stroke="#2e4a2e" strokeWidth={1.5} fill="none" rx={12} />
+        {/* Baseline */}
+        <Line x1={0} y1={courtH-1} x2={courtW} y2={courtH-1} stroke="#2e4a2e" strokeWidth={1.5} />
+        {/* Paint */}
+        <Rect x={courtW*0.29} y={0} width={courtW*0.42} height={courtH*0.36} stroke="#2e4a2e" strokeWidth={1.5} fill="rgba(255,255,255,0.02)" />
+        {/* Free-throw circle */}
+        <Circle cx={courtW*0.5} cy={courtH*0.36} r={courtW*0.13} stroke="#2e4a2e" strokeWidth={1.5} fill="none" />
+        {/* Basket */}
+        <Circle cx={courtW*0.5} cy={courtH*0.06} r={courtW*0.025} stroke="#5a8a5a" strokeWidth={1.5} fill="none" />
+        {/* Restricted area arc */}
+        <Path
+          d={`M ${courtW*0.425} ${courtH*0.06} A ${courtW*0.075} ${courtW*0.075} 0 0 0 ${courtW*0.575} ${courtH*0.06}`}
+          stroke="#2e4a2e" strokeWidth={1.5} fill="none"
+        />
+        {/* Three-point arc */}
         <Path
           d={`M ${courtW*0.09} 0 L ${courtW*0.09} ${courtH*0.38} A ${courtW*0.43} ${courtW*0.43} 0 0 0 ${courtW*0.91} ${courtH*0.38} L ${courtW*0.91} 0`}
-          stroke="#3a3a3a" strokeWidth={2} fill="none"
+          stroke="#2e4a2e" strokeWidth={1.5} fill="none"
         />
       </Svg>
       {assigned.map(({ player, x, y }) => (
@@ -269,7 +293,7 @@ function OverviewTab({ teamKey, standing, allStandings }: {
                 <TouchableOpacity
                   key={g.GameID}
                   style={{ alignItems: 'center', gap: 7 }}
-                  onPress={() => navigation.navigate('Game', { gameId: g.GameID, gameDate: g.Day ?? '', awayTeam: g.AwayTeam, homeTeam: g.HomeTeam })}
+                  onPress={() => navigation.navigate('Game', { gameId: g.GameID, gameDate: (g.Day ?? '').split('T')[0], awayTeam: g.AwayTeam, homeTeam: g.HomeTeam })}
                   activeOpacity={0.7}
                 >
                   <TeamLogo abbrev={opp} size={32} />
@@ -365,34 +389,59 @@ function OverviewTab({ teamKey, standing, allStandings }: {
               {(() => {
                 const st = statsView === 'playoffs' ? playoffStats : seasonStats;
                 if (!st) return <Text style={[s.emptyText, { marginTop: 16 }]}>No stats available</Text>;
+                const winPct = statsView === 'regular' && standing
+                  ? standing.Percentage.toFixed(3)
+                  : st.gp > 0
+                    ? ((parseInt(st.homeRec.split('-')[0]) + parseInt(st.awayRec.split('-')[0])) / st.gp).toFixed(3)
+                    : '—';
+                const streak = statsView === 'regular' ? standing?.StreakDescription : null;
+                const isWStreak = streak?.startsWith('W');
                 return (
-                  <View style={{ marginTop: 14 }}>
-                    {[
-                      [{ val: st.ppg, label: 'PPG' }, { val: st.oppPpg, label: 'OPP PPG' }, { val: String(st.gp), label: 'GP' }],
-                      [{ val: st.homeRec, label: 'Home' }, { val: st.awayRec, label: 'Away' }, { val: statsView === 'regular' && standing ? standing.Percentage.toFixed(3) : (st.gp > 0 ? ((parseInt(st.homeRec.split('-')[0]) + parseInt(st.awayRec.split('-')[0])) / st.gp).toFixed(3) : '—'), label: 'Win%' }],
-                    ].map((row, ri) => (
-                      <View key={ri}>
-                        {ri > 0 && <View style={s.divider} />}
-                        <View style={{ flexDirection: 'row', paddingVertical: 12 }}>
-                          {row.map(({ val, label }, ci) => (
-                            <View key={label} style={[{ flex: 1, alignItems: 'center' }, ci > 0 && { borderLeftWidth: 1, borderLeftColor: '#2a2a2a' }]}>
-                              <Text style={s.statNum}>{val}</Text>
-                              <Text style={s.statLabel}>{label}</Text>
-                            </View>
-                          ))}
+                  <View style={{ marginTop: 16, gap: 12 }}>
+                    {/* Scoring row */}
+                    <View style={s.statGroupCard}>
+                      <Text style={s.statGroupLabel}>Scoring</Text>
+                      <View style={s.statRow3}>
+                        <View style={s.statCell}>
+                          <Text style={s.statNum}>{st.ppg}</Text>
+                          <Text style={s.statLabel}>PPG</Text>
+                        </View>
+                        <View style={[s.statCell, s.statCellBorder]}>
+                          <Text style={[s.statNum, { color: '#e05a5a' }]}>{st.oppPpg}</Text>
+                          <Text style={s.statLabel}>OPP PPG</Text>
+                        </View>
+                        <View style={[s.statCell, s.statCellBorder]}>
+                          <Text style={[s.statNum, { color: '#aaa', fontSize: 16 }]}>{st.gp}</Text>
+                          <Text style={s.statLabel}>GP</Text>
                         </View>
                       </View>
-                    ))}
-                    {statsView === 'regular' && standing?.StreakDescription && (
-                      <>
-                        <View style={s.divider} />
-                        <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 10, gap: 8 }}>
-                          <Text style={s.statLabel}>Streak</Text>
-                          <Text style={[s.statNum, { fontSize: 15 }, standing.StreakDescription.startsWith('W') ? s.winnerText : s.loserText]}>
-                            {standing.StreakDescription}
-                          </Text>
+                    </View>
+                    {/* Record row */}
+                    <View style={s.statGroupCard}>
+                      <Text style={s.statGroupLabel}>Record</Text>
+                      <View style={s.statRow3}>
+                        <View style={s.statCell}>
+                          <Text style={s.statNum}>{st.homeRec}</Text>
+                          <Text style={s.statLabel}>Home</Text>
                         </View>
-                      </>
+                        <View style={[s.statCell, s.statCellBorder]}>
+                          <Text style={s.statNum}>{st.awayRec}</Text>
+                          <Text style={s.statLabel}>Away</Text>
+                        </View>
+                        <View style={[s.statCell, s.statCellBorder]}>
+                          <Text style={s.statNum}>{winPct}</Text>
+                          <Text style={s.statLabel}>Win%</Text>
+                        </View>
+                      </View>
+                    </View>
+                    {/* Streak badge */}
+                    {streak && (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                        <Text style={s.statGroupLabel}>Streak</Text>
+                        <View style={[s.streakBadge, { backgroundColor: isWStreak ? '#1a3a1a' : '#3a1a1a', borderColor: isWStreak ? '#4caf50' : '#e05a5a' }]}>
+                          <Text style={[s.streakBadgeText, { color: isWStreak ? '#4caf50' : '#e05a5a' }]}>{streak}</Text>
+                        </View>
+                      </View>
                     )}
                   </View>
                 );
@@ -1119,7 +1168,16 @@ const s = StyleSheet.create({
   segChipTextActive: { color: '#000', fontWeight: '700' },
 
   statNum:        { color: '#fff', fontSize: 18, fontWeight: '700' },
-  statLabel:      { color: '#555', fontSize: 12, fontWeight: '500', marginTop: 2 },
+  statLabel:      { color: '#555', fontSize: 11, fontWeight: '500', marginTop: 3, textTransform: 'uppercase', letterSpacing: 0.4 },
+
+  statGroupCard:  { backgroundColor: '#1c1c1c', borderRadius: 10, padding: 12, borderWidth: 1, borderColor: '#2a2a2a' },
+  statGroupLabel: { color: '#444', fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 10 },
+  statRow3:       { flexDirection: 'row' },
+  statCell:       { flex: 1, alignItems: 'center' },
+  statCellBorder: { borderLeftWidth: 1, borderLeftColor: '#2a2a2a' },
+
+  streakBadge:    { borderRadius: 8, borderWidth: 1.5, paddingHorizontal: 10, paddingVertical: 4 },
+  streakBadgeText:{ fontSize: 13, fontWeight: '800', letterSpacing: 0.3 },
 
   // ── standings ────────────────────────────────────────────────────────────────
   standRow:           { flexDirection: 'row', alignItems: 'center' },

@@ -854,6 +854,10 @@ export async function getBoxScore(gameId, gameDate = null, awayHint = null, home
   const players  = parseRS(data.resultSets, 'PlayerStats');
   const teamRows = parseRS(data.resultSets, 'TeamStats');
   if (!players.length) {
+    // Bust stale empty cache so next request re-fetches
+    const cacheFile = join(CACHE_DIR, fileKey(`boxscore_v2_${nbaId}`));
+    if (existsSync(cacheFile)) { try { unlinkSync(cacheFile); } catch {} }
+
     // NBA API returned empty — find ESPN game ID from daily scoreboard by matching teams
     if (gameDate) {
       // Get the two teams from the NBA game summary
@@ -864,19 +868,18 @@ export async function getBoxScore(gameId, gameDate = null, awayHint = null, home
       const homeAbbr = homeId ? (ID_TO_APP[parseInt(homeId)] ?? '') : '';
       const awayAbbr = visitorId ? (ID_TO_APP[parseInt(visitorId)] ?? '') : '';
 
+      const aliases = ESPN_TEAM_ALIASES;
+      const matchesTeam = (sbTeam, key) => {
+        if (!key) return false;
+        const possible = aliases[key] ?? [key];
+        return possible.includes(sbTeam);
+      };
       for (const offset of [0, -1, 1]) {
         const d = new Date(gameDate + 'T12:00:00Z');
         d.setUTCDate(d.getUTCDate() + offset);
         const adjDate = d.toISOString().split('T')[0];
-        const sbCache = readDisk(`espn_scoreboard_${adjDate}`);
-        const sbGames = Array.isArray(sbCache) ? sbCache : [];
-        // Match by team IDs, abbreviations, or passed team params
-        const aliases = ESPN_TEAM_ALIASES;
-        const matchesTeam = (sbTeam, key) => {
-          if (!key) return false;
-          const possible = aliases[key] ?? [key];
-          return possible.includes(sbTeam);
-        };
+        // Use live fetch so we don't fail when the scoreboard was never cached for that date
+        const sbGames = await getEspnGamesByDate(adjDate).catch(() => []);
         const match = sbGames.find(g =>
           (homeId && g.HomeTeamID === parseInt(homeId) && g.AwayTeamID === parseInt(visitorId)) ||
           (homeAbbr && matchesTeam(g.HomeTeam, homeAbbr) && matchesTeam(g.AwayTeam, awayAbbr)) ||
