@@ -1354,6 +1354,67 @@ async function getNbaGameLogs(season, playerId) {
   return [...regular, ...playoffs, ...playIn].sort((a, b) => (b.Day ?? '').localeCompare(a.Day ?? ''));
 }
 
+// ── Team season stats ─────────────────────────────────────────────────────────
+
+export async function getTeamSeasonStats(season, teamAbbr) {
+  season = parseInt(season);
+  const seasonStr = toSeasonStr(season);
+  const cacheKey  = `teamstats_all_${season}`;
+
+  const fetchAll = (seasonType) => nbFetch('/stats/leaguedashteamstats', {
+    Season: seasonStr, SeasonType: seasonType,
+    PerMode: 'PerGame', LeagueID: '00',
+    MeasureType: 'Base',
+  }, TTL_SEASON, `${cacheKey}_${seasonType.replace(/ /g,'_')}`);
+
+  const [regData, poData] = await Promise.allSettled([
+    fetchAll('Regular Season'),
+    fetchAll('Playoffs'),
+  ]);
+
+  const appAbbr = teamAbbr.toUpperCase();
+  const aliases = ESPN_TEAM_ALIASES[appAbbr] ?? [appAbbr];
+
+  function findTeam(data) {
+    if (!data?.resultSets) return null;
+    const rows = parseRS(data.resultSets, 'LeagueDashTeamStats');
+    return rows.find(r => {
+      const a = toAppAbbr(r.TEAM_ABBREVIATION ?? '');
+      return a === appAbbr || aliases.includes(a);
+    }) ?? null;
+  }
+
+  function mapRow(r) {
+    if (!r) return null;
+    return {
+      GP:    r.GP  ?? 0,
+      W:     r.W   ?? 0,
+      L:     r.L   ?? 0,
+      WinPct: r.W_PCT ?? 0,
+      PTS:   r.PTS ?? 0,
+      REB:   r.REB ?? 0,
+      AST:   r.AST ?? 0,
+      STL:   r.STL ?? 0,
+      BLK:   r.BLK ?? 0,
+      TOV:   r.TOV ?? 0,
+      OREB:  r.OREB ?? 0,
+      DREB:  r.DREB ?? 0,
+      FGPct: r.FG_PCT  ?? 0,
+      TPPct: r.FG3_PCT ?? 0,
+      FTPct: r.FT_PCT  ?? 0,
+      PlusMinus: r.PLUS_MINUS ?? 0,
+    };
+  }
+
+  const regRow = regData.status === 'fulfilled' ? findTeam(regData.value) : null;
+  const poRow  = poData.status  === 'fulfilled' ? findTeam(poData.value)  : null;
+
+  return {
+    regular:  mapRow(regRow),
+    playoffs: mapRow(poRow),
+  };
+}
+
 // ── Player season stats ───────────────────────────────────────────────────────
 
 export async function getPlayerSeasonStats(season, playerId) {

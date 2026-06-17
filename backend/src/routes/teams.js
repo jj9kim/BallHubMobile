@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getAllTeams, getTeamRoster, getTeamSchedule, getDraftClass, getTeamSalaries, ESPN_TEAM_ALIASES } from '../services/nbaApiService.js';
+import { getAllTeams, getTeamRoster, getTeamSchedule, getDraftClass, getTeamSalaries, getTeamSeasonStats, ESPN_TEAM_ALIASES } from '../services/nbaApiService.js';
 
 const router = Router();
 
@@ -40,6 +40,16 @@ router.get('/:team/schedule/:season', async (req, res) => {
   try {
     const games = await getTeamSchedule(req.params.season, req.params.team.toUpperCase());
     res.json({ success: true, games, count: games.length });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// GET /api/teams/:team/stats/:season
+router.get('/:team/stats/:season', async (req, res) => {
+  try {
+    const data = await getTeamSeasonStats(req.params.season, req.params.team.toUpperCase());
+    res.json({ success: true, ...data });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }

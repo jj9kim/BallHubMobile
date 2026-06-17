@@ -1033,11 +1033,106 @@ function DraftTab({ teamKey }: { teamKey: string }) {
   );
 }
 
-function StatsTab() {
+function StatsTab({ teamKey }: { teamKey: string }) {
+  const [regular,  setRegular]  = useState<any>(null);
+  const [playoffs, setPlayoffs] = useState<any>(null);
+  const [loading,  setLoading]  = useState(true);
+  const [view,     setView]     = useState<'regular' | 'playoffs'>('regular');
+
+  useEffect(() => {
+    NBAService.getTeamSeasonStats(teamKey)
+      .then(res => { setRegular(res.regular); setPlayoffs(res.playoffs); })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [teamKey]);
+
+  const fmtPct = (v: number) => v ? (v * 100).toFixed(1) + '%' : '—';
+  const fmt    = (v: number, d = 1) => v != null ? v.toFixed(d) : '—';
+
+  const st = view === 'playoffs' ? playoffs : regular;
+
   return (
-    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-      <Text style={{ color: '#555', fontSize: 15 }}>Stats coming soon</Text>
-    </View>
+    <ScrollView contentContainerStyle={{ paddingHorizontal: 12, paddingTop: 12, paddingBottom: 40, gap: 10 }}>
+      {/* Toggle */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+        <Text style={s.sectionLabel}>{view === 'playoffs' ? 'Playoff Stats' : 'Season Stats'}</Text>
+        {playoffs && (
+          <TouchableOpacity
+            onPress={() => setView(v => v === 'regular' ? 'playoffs' : 'regular')}
+            style={[s.toggleBtn, view === 'playoffs' && s.toggleBtnActive]}
+          >
+            <Text style={[s.toggleBtnText, view === 'playoffs' && s.toggleBtnTextActive]}>
+              {view === 'playoffs' ? 'Regular Season' : 'Playoffs'}
+            </Text>
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {loading ? (
+        <ActivityIndicator color="#fff" style={{ marginTop: 40 }} />
+      ) : !st ? (
+        <Text style={[s.emptyText, { textAlign: 'center', marginTop: 40 }]}>No stats available</Text>
+      ) : (
+        <>
+          {/* Big 4 */}
+          <View style={s.card}>
+            <View style={{ flexDirection: 'row' }}>
+              {[
+                { val: fmt(st.PTS),  label: 'PTS' },
+                { val: fmt(st.REB),  label: 'REB' },
+                { val: fmt(st.AST),  label: 'AST' },
+                { val: fmt(st.TOV),  label: 'TOV' },
+              ].map(({ val, label }, i) => (
+                <View key={label} style={[s.bigStatBox, i > 0 && { borderLeftWidth: 1, borderLeftColor: '#2a2a2a' }]}>
+                  <Text style={s.bigStatVal}>{val}</Text>
+                  <Text style={s.bigStatLbl}>{label}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+
+          {/* Shooting */}
+          <View style={s.card}>
+            <Text style={s.sectionLabel}>Shooting</Text>
+            <View style={{ marginTop: 14 }}>
+              <View style={s.psRow}><Text style={s.psLabel}>Field Goal %</Text><Text style={s.psValue}>{fmtPct(st.FGPct)}</Text></View>
+              <View style={s.divider} />
+              <View style={s.psRow}><Text style={s.psLabel}>Three Point %</Text><Text style={s.psValue}>{fmtPct(st.TPPct)}</Text></View>
+              <View style={s.divider} />
+              <View style={s.psRow}><Text style={s.psLabel}>Free Throw %</Text><Text style={s.psValue}>{fmtPct(st.FTPct)}</Text></View>
+            </View>
+          </View>
+
+          {/* Rebounds */}
+          <View style={s.card}>
+            <Text style={s.sectionLabel}>Rebounds</Text>
+            <View style={{ marginTop: 14 }}>
+              <View style={s.psRow}><Text style={s.psLabel}>Total</Text><Text style={s.psValue}>{fmt(st.REB)}</Text></View>
+              <View style={s.divider} />
+              <View style={s.psRow}><Text style={s.psLabel}>Offensive</Text><Text style={s.psValue}>{fmt(st.OREB)}</Text></View>
+              <View style={s.divider} />
+              <View style={s.psRow}><Text style={s.psLabel}>Defensive</Text><Text style={s.psValue}>{fmt(st.DREB)}</Text></View>
+            </View>
+          </View>
+
+          {/* Defense & Other */}
+          <View style={s.card}>
+            <Text style={s.sectionLabel}>Defense & Other</Text>
+            <View style={{ marginTop: 14 }}>
+              <View style={s.psRow}><Text style={s.psLabel}>Steals</Text><Text style={s.psValue}>{fmt(st.STL)}</Text></View>
+              <View style={s.divider} />
+              <View style={s.psRow}><Text style={s.psLabel}>Blocks</Text><Text style={s.psValue}>{fmt(st.BLK)}</Text></View>
+              <View style={s.divider} />
+              <View style={s.psRow}><Text style={s.psLabel}>Turnovers</Text><Text style={s.psValue}>{fmt(st.TOV)}</Text></View>
+              <View style={s.divider} />
+              <View style={s.psRow}><Text style={s.psLabel}>Plus / Minus</Text><Text style={[s.psValue, { color: st.PlusMinus >= 0 ? '#4caf50' : '#e05a5a' }]}>{st.PlusMinus >= 0 ? '+' : ''}{fmt(st.PlusMinus)}</Text></View>
+              <View style={s.divider} />
+              <View style={s.psRow}><Text style={s.psLabel}>Games Played</Text><Text style={s.psValue}>{st.GP}</Text></View>
+            </View>
+          </View>
+        </>
+      )}
+    </ScrollView>
   );
 }
 
@@ -1081,7 +1176,7 @@ export default function TeamScreen({ route }: Props) {
           {activeTab === 'Overview'   && <OverviewTab teamKey={teamKey} standing={standing} allStandings={standings} />}
           {activeTab === 'Roster'     && <RosterTab   teamKey={teamKey} />}
           {activeTab === 'Matches'    && <MatchesTab  teamKey={teamKey} />}
-          {activeTab === 'Stats'      && <StatsTab />}
+          {activeTab === 'Stats'      && <StatsTab teamKey={teamKey} />}
           {activeTab === 'Contracts'  && <ContractsTab teamKey={teamKey} />}
           {activeTab === 'Draft'      && <DraftTab    teamKey={teamKey} />}
         </View>

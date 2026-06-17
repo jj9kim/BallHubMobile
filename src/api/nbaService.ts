@@ -177,6 +177,9 @@ export const NBAService = {
   getTeamSchedule: (team: string, season = 2025) =>
     apiFetch<{ games: Game[] }>(`/api/teams/${team}/schedule/${season}`),
 
+  getTeamSeasonStats: (team: string, season = 2025) =>
+    apiFetch<{ regular: any; playoffs: any }>(`/api/teams/${team}/stats/${season}`),
+
   // Player ID map (SportsData → NbaDotCom)
   getNbaIdMap: () =>
     apiFetch<{ map: Record<number, number> }>('/api/players/nba-id-map'),
