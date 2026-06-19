@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getAllTeams, getTeamRoster, getTeamSchedule, getDraftClass, getTeamSalaries, getTeamSeasonStats, ESPN_TEAM_ALIASES } from '../services/nbaApiService.js';
+import { getAllTeams, getTeamRoster, getTeamSchedule, getDraftClass, getTeamSalaries, getTeamSeasonStats, getPlayerSeasonStats, ESPN_TEAM_ALIASES } from '../services/nbaApiService.js';
 
 const router = Router();
 
@@ -50,6 +50,25 @@ router.get('/:team/stats/:season', async (req, res) => {
   try {
     const data = await getTeamSeasonStats(req.params.season, req.params.team.toUpperCase());
     res.json({ success: true, ...data });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// GET /api/teams/:team/player-stats/:season  — all roster players' season averages
+router.get('/:team/player-stats/:season', async (req, res) => {
+  try {
+    const team   = req.params.team.toUpperCase();
+    const season = req.params.season;
+    const roster = await getTeamRoster(team);
+    const players = Array.isArray(roster) ? roster : (roster.players ?? []);
+    const playerStats = await Promise.all(
+      players.map(async p => {
+        const stats = await getPlayerSeasonStats(season, p.PlayerID).catch(() => null);
+        return { player: p, stats };
+      })
+    );
+    res.json({ success: true, players: playerStats });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }

@@ -1033,17 +1033,27 @@ function DraftTab({ teamKey }: { teamKey: string }) {
   );
 }
 
+type SortKey = 'PTS' | 'REB' | 'AST' | 'STL' | 'BLK' | 'FG' | 'GP';
+
 function StatsTab({ teamKey }: { teamKey: string }) {
-  const [regular,  setRegular]  = useState<any>(null);
-  const [playoffs, setPlayoffs] = useState<any>(null);
-  const [loading,  setLoading]  = useState(true);
-  const [view,     setView]     = useState<'regular' | 'playoffs'>('regular');
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const [regular,     setRegular]     = useState<any>(null);
+  const [playoffs,    setPlayoffs]    = useState<any>(null);
+  const [rosterStats, setRosterStats] = useState<{ player: any; stats: any }[]>([]);
+  const [loading,     setLoading]     = useState(true);
+  const [loadingRoster, setLoadingRoster] = useState(true);
+  const [view,        setView]        = useState<'regular' | 'playoffs'>('regular');
+  const [sortKey,     setSortKey]     = useState<SortKey>('PTS');
 
   useEffect(() => {
     NBAService.getTeamSeasonStats(teamKey)
       .then(res => { setRegular(res.regular); setPlayoffs(res.playoffs); })
       .catch(() => {})
       .finally(() => setLoading(false));
+    NBAService.getTeamPlayerStats(teamKey)
+      .then(res => setRosterStats(res.players ?? []))
+      .catch(() => {})
+      .finally(() => setLoadingRoster(false));
   }, [teamKey]);
 
   const fmtPct = (v: number) => v ? (v * 100).toFixed(1) + '%' : '—';
@@ -1132,6 +1142,71 @@ function StatsTab({ teamKey }: { teamKey: string }) {
           </View>
         </>
       )}
+
+      {/* ── Player Stats ── */}
+      <View style={s.card}>
+        <Text style={s.sectionLabel}>Player Stats</Text>
+        {loadingRoster ? (
+          <ActivityIndicator color="#fff" style={{ marginVertical: 16 }} />
+        ) : rosterStats.length === 0 ? (
+          <Text style={[s.emptyText, { marginTop: 12 }]}>No player data</Text>
+        ) : (() => {
+          const COLS: { key: SortKey; label: string; getValue: (st: any) => number }[] = [
+            { key: 'PTS', label: 'PTS', getValue: s => s?.Points ?? 0 },
+            { key: 'REB', label: 'REB', getValue: s => s?.Rebounds ?? 0 },
+            { key: 'AST', label: 'AST', getValue: s => s?.Assists ?? 0 },
+            { key: 'STL', label: 'STL', getValue: s => s?.Steals ?? 0 },
+            { key: 'BLK', label: 'BLK', getValue: s => s?.BlockedShots ?? 0 },
+            { key: 'FG',  label: 'FG%', getValue: s => s?.FieldGoalsPercentage ?? 0 },
+            { key: 'GP',  label: 'GP',  getValue: s => s?.Games ?? 0 },
+          ];
+          const col = COLS.find(c => c.key === sortKey)!;
+          const sorted = [...rosterStats]
+            .filter(r => r.stats)
+            .sort((a, b) => col.getValue(b.stats) - col.getValue(a.stats));
+
+          return (
+            <>
+              {/* Header */}
+              <View style={[s.psrRow, { marginTop: 10, borderBottomWidth: 1, borderBottomColor: '#2a2a2a', paddingBottom: 8 }]}>
+                <Text style={s.psrName} />
+                {COLS.map(c => (
+                  <TouchableOpacity key={c.key} style={s.psrCell} onPress={() => setSortKey(c.key)}>
+                    <Text style={[s.psrHeader, sortKey === c.key && { color: '#fff' }]}>{c.label}</Text>
+                    {sortKey === c.key && <View style={{ height: 2, backgroundColor: '#fff', borderRadius: 1, marginTop: 2 }} />}
+                  </TouchableOpacity>
+                ))}
+              </View>
+              {sorted.map(({ player, stats }, i) => {
+                const fmtVal = (v: number, isPercent = false) =>
+                  isPercent ? (v * 100).toFixed(1) + '%' : v.toFixed(1);
+                return (
+                  <TouchableOpacity
+                    key={player.PlayerID}
+                    style={[s.psrRow, i > 0 && { borderTopWidth: 1, borderTopColor: '#1e1e1e' }, { paddingVertical: 9 }]}
+                    onPress={() => navigation.navigate('PlayerProfile', { playerId: player.PlayerID })}
+                    activeOpacity={0.7}
+                  >
+                    <View style={s.psrName}>
+                      <Text style={{ color: '#fff', fontSize: 12, fontWeight: '600' }} numberOfLines={1}>
+                        {player.LastName}
+                      </Text>
+                      <Text style={{ color: '#555', fontSize: 10 }}>{player.Position}</Text>
+                    </View>
+                    <Text style={s.psrStat}>{fmtVal(stats.Points)}</Text>
+                    <Text style={s.psrStat}>{fmtVal(stats.Rebounds)}</Text>
+                    <Text style={s.psrStat}>{fmtVal(stats.Assists)}</Text>
+                    <Text style={s.psrStat}>{fmtVal(stats.Steals)}</Text>
+                    <Text style={s.psrStat}>{fmtVal(stats.BlockedShots)}</Text>
+                    <Text style={s.psrStat}>{fmtVal(stats.FieldGoalsPercentage, true)}</Text>
+                    <Text style={[s.psrStat, { color: '#666' }]}>{stats.Games}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </>
+          );
+        })()}
+      </View>
     </ScrollView>
   );
 }
@@ -1235,6 +1310,13 @@ const s = StyleSheet.create({
   psRow:          { flexDirection: 'row', alignItems: 'center', paddingVertical: 10 },
   psLabel:        { flex: 1, color: '#aaa', fontSize: 14, fontWeight: '500' },
   psValue:        { color: '#fff', fontSize: 14, fontWeight: '700' },
+
+  // ── player stats table ────────────────────────────────────────────────────────
+  psrRow:         { flexDirection: 'row', alignItems: 'center' },
+  psrName:        { width: 80 },
+  psrCell:        { flex: 1, alignItems: 'center' },
+  psrHeader:      { color: '#555', fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.4, textAlign: 'center' },
+  psrStat:        { flex: 1, color: '#ccc', fontSize: 11, fontWeight: '600', textAlign: 'center' },
 
   // ── standings ────────────────────────────────────────────────────────────────
   standRow:           { flexDirection: 'row', alignItems: 'center' },
