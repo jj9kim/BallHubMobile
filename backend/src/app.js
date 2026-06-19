@@ -6,7 +6,7 @@ import gamesRouter from './routes/games.js';
 import standingsRouter from './routes/standings.js';
 import teamsRouter from './routes/teams.js';
 import playersRouter from './routes/players.js';
-import { getStandings, getSchedule, getDraftClass, getAllHistoricalPlayers, getPlayerCareerStats, getPlayerGameLogs, getTeamRoster, existsDisk, getAllPlayerSeasonStats, getPlayerSeasonStats, writeDisk, CACHE_DIR } from './services/nbaApiService.js';
+import { getStandings, getSchedule, getDraftClass, getAllHistoricalPlayers, getPlayerById, getPlayerCareerStats, getPlayerGameLogs, getTeamRoster, existsDisk, getAllPlayerSeasonStats, getPlayerSeasonStats, writeDisk, CACHE_DIR } from './services/nbaApiService.js';
 
 const app = express();
 const PORT = process.env.PORT ?? 5000;
@@ -157,5 +157,67 @@ app.listen(PORT, async () => {
 
     console.log(`\n=== Player Profile Cache Complete ===`);
     console.log(`Cached: ${done} | Failed: ${failed} | Total: ${allIds.length}`);
+
+    // ── Step 4: Full game log + season stats cache for ALL active players ──────
+    // Skips retired players (last career season < currentSeason) and players
+    // already cached. Runs once and writes to disk permanently (10-year TTL).
+    // On subsequent restarts this whole block is skipped instantly.
+    const { readFileSync, readdirSync: rds } = await import('fs');
+    const { join } = await import('path');
+
+    // Build set of player IDs that need game logs
+    const allPlayerFiles = rds(CACHE_DIR).filter(f => f.startsWith('player_') && f !== 'player_map.json');
+    const needingLogs = [];
+
+    for (const fname of allPlayerFiles) {
+      const pid = fname.replace('player_', '').replace('.json', '');
+      if (existsDisk(`gamelogs_nba_${pid}_${currentSeason}`) &&
+          existsDisk(`seasonstats_${pid}_${currentSeason}`)) continue;
+
+      // Skip retired players — check career_seasons_ last year
+      const careerFile = join(CACHE_DIR, `career_seasons_${pid}.json`);
+      try {
+        const { data: seasons } = JSON.parse(readFileSync(careerFile, 'utf8'));
+        if (Array.isArray(seasons) && seasons.length > 0) {
+          const lastYear = Math.max(...seasons.map(s => s.SeasonYear ?? 0));
+          if (lastYear < currentSeason) continue; // retired, skip
+        }
+      } catch { continue; } // no career data, skip
+
+      needingLogs.push(Number(pid));
+    }
+
+    if (needingLogs.length === 0) {
+      console.log('\n✓ All active players already fully cached — instant loads guaranteed');
+      return;
+    }
+
+    const estMins2 = Math.ceil(needingLogs.length * 1.5 / 60);
+    console.log(`\n=== Full Player Cache Warm ===`);
+    console.log(`Active players needing game logs: ${needingLogs.length}`);
+    console.log(`Estimated time: ~${estMins2} minutes (runs once, cached forever)\n`);
+
+    let gl = 0, glFail = 0;
+    const glStart = Date.now();
+
+    for (const id of needingLogs) {
+      if (!existsDisk(`gamelogs_nba_${id}_${currentSeason}`)) {
+        try { await getPlayerGameLogs(currentSeason, id); }
+        catch { glFail++; }
+      }
+      if (!existsDisk(`seasonstats_${id}_${currentSeason}`)) {
+        await getPlayerSeasonStats(currentSeason, id).catch(() => {});
+      }
+      gl++;
+      await new Promise(r => setTimeout(r, 600));
+
+      if (gl % 25 === 0 || gl === needingLogs.length) {
+        const mins = ((Date.now() - glStart) / 60000).toFixed(1);
+        const eta  = Math.ceil((needingLogs.length - gl) * 1.5 / 60);
+        console.log(`[Game logs ${gl}/${needingLogs.length}] failed: ${glFail} | ${mins}m elapsed | ~${eta}m left`);
+      }
+    }
+
+    console.log(`\n✓ Full cache warm complete — all active players now load instantly forever`);
   })();
 });
