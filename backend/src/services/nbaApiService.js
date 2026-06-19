@@ -11,7 +11,7 @@ import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const CACHE_DIR = join(__dirname, '../../../cache_nba');
+export const CACHE_DIR = join(__dirname, '../../../cache_nba');
 
 function decodeHtml(str) {
   if (!str || !str.includes('&')) return str;
@@ -76,7 +76,7 @@ function readDisk(key, { allowStale = false } = {}) {
   return undefined;
 }
 
-function writeDisk(key, data, ttl) {
+export function writeDisk(key, data, ttl) {
   const file = join(CACHE_DIR, fileKey(key));
   try { writeFileSync(file, JSON.stringify({ data, expires: Date.now() + ttl * 1000 })); } catch {}
 }
@@ -1421,30 +1421,39 @@ export async function getPlayerSeasonStats(season, playerId) {
   if (cached !== undefined) return cached;
 
   const seasonStr = toSeasonStr(season);
+  const allStatsKey = `seasonstats_all_${season}`;
 
-  // Try NBA league-wide stats API (one call covers all players)
-  try {
-    const data = await nbFetch('/stats/leaguedashplayerstats', {
-      Season: seasonStr, SeasonType: 'Regular Season',
-      PerMode: 'PerGame', LeagueID: '00',
-    }, TTL_SEASON, `seasonstats_all_${season}`);
-    const rows = parseRS(data.resultSets, 'LeagueDashPlayerStats');
-    const r = rows.find(p => p.PLAYER_ID === Number(playerId));
-    if (r) {
-      const result = {
-        PlayerID: Number(playerId), Season: season,
-        Games: r.GP ?? 0, Minutes: r.MIN ?? 0,
-        Points: r.PTS ?? 0, Rebounds: r.REB ?? 0, Assists: r.AST ?? 0,
-        Steals: r.STL ?? 0, BlockedShots: r.BLK ?? 0, Turnovers: r.TOV ?? 0,
-        FieldGoalsPercentage: r.FG_PCT ?? 0, ThreePointersPercentage: r.FG3_PCT ?? 0,
-        FreeThrowsPercentage: r.FT_PCT ?? 0, TrueShootingPercentage: 0,
-        PlayerEfficiencyRating: 0, UsageRatePercentage: 0,
-        PlusMinus: r.PLUS_MINUS ?? 0, DoubleDoubles: r.DD2 ?? 0, TripleDoubles: r.TD3 ?? 0,
-      };
-      writeDisk(perPlayerKey, result, TTL_SEASON);
-      return result;
+  // Only try the NBA league-wide API if we haven't already confirmed it's unavailable.
+  // Cache a null sentinel on failure so we skip it for the next 24h instead of
+  // waiting 12s for the timeout on every single player load.
+  const allStatsKnownBad = readDisk(allStatsKey) === null;
+  if (!allStatsKnownBad) {
+    try {
+      const data = await nbFetch('/stats/leaguedashplayerstats', {
+        Season: seasonStr, SeasonType: 'Regular Season',
+        PerMode: 'PerGame', LeagueID: '00',
+      }, TTL_SEASON, allStatsKey);
+      const rows = parseRS(data.resultSets, 'LeagueDashPlayerStats');
+      const r = rows.find(p => p.PLAYER_ID === Number(playerId));
+      if (r) {
+        const result = {
+          PlayerID: Number(playerId), Season: season,
+          Games: r.GP ?? 0, Minutes: r.MIN ?? 0,
+          Points: r.PTS ?? 0, Rebounds: r.REB ?? 0, Assists: r.AST ?? 0,
+          Steals: r.STL ?? 0, BlockedShots: r.BLK ?? 0, Turnovers: r.TOV ?? 0,
+          FieldGoalsPercentage: r.FG_PCT ?? 0, ThreePointersPercentage: r.FG3_PCT ?? 0,
+          FreeThrowsPercentage: r.FT_PCT ?? 0, TrueShootingPercentage: 0,
+          PlayerEfficiencyRating: 0, UsageRatePercentage: 0,
+          PlusMinus: r.PLUS_MINUS ?? 0, DoubleDoubles: r.DD2 ?? 0, TripleDoubles: r.TD3 ?? 0,
+        };
+        writeDisk(perPlayerKey, result, TTL_SEASON);
+        return result;
+      }
+    } catch {
+      // Mark as unavailable for 24h so subsequent calls skip the 12s timeout wait
+      writeDisk(allStatsKey, null, TTL_SEASON);
     }
-  } catch {}
+  }
 
   // Fallback: compute averages from regular season game logs only
   const allLogs = await getPlayerGameLogs(season, playerId).catch(() => []);

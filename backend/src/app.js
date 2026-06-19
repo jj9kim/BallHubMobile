@@ -6,7 +6,7 @@ import gamesRouter from './routes/games.js';
 import standingsRouter from './routes/standings.js';
 import teamsRouter from './routes/teams.js';
 import playersRouter from './routes/players.js';
-import { getStandings, getSchedule, getDraftClass, getAllHistoricalPlayers, getPlayerCareerStats, getPlayerGameLogs, getTeamRoster, existsDisk, getAllPlayerSeasonStats } from './services/nbaApiService.js';
+import { getStandings, getSchedule, getDraftClass, getAllHistoricalPlayers, getPlayerCareerStats, getPlayerGameLogs, getTeamRoster, existsDisk, getAllPlayerSeasonStats, getPlayerSeasonStats, writeDisk, CACHE_DIR } from './services/nbaApiService.js';
 
 const app = express();
 const PORT = process.env.PORT ?? 5000;
@@ -23,6 +23,12 @@ app.get('/api/health', (_, res) => res.json({ status: 'ok' }));
 
 app.listen(PORT, async () => {
   console.log(`BallHub backend running on http://localhost:${PORT}`);
+
+  // Immediately mark leaguedashplayerstats as unavailable so player loads never
+  // wait 12s for its timeout. getPlayerSeasonStats checks this sentinel first.
+  const _now = new Date();
+  const _season = _now.getMonth() + 1 >= 10 ? _now.getFullYear() : _now.getFullYear() - 1;
+  writeDisk(`seasonstats_all_${_season}`, null, 86400);
 
   // Pre-warm standings, schedule, and all 30 team rosters immediately
   const ALL_TEAMS = [
@@ -61,13 +67,25 @@ app.listen(PORT, async () => {
       console.log('Historical player map ready');
     } catch {}
 
-    // Step 2b: pre-warm current season stats for all players (single API call)
+    // Step 2b: pre-warm seasonstats from already-cached game logs.
+    // Pure disk computation — no network calls. Skips players already cached.
     const now = new Date();
     const currentSeason = now.getMonth() + 1 >= 10 ? now.getFullYear() : now.getFullYear() - 1;
-    try {
-      await getAllPlayerSeasonStats(currentSeason);
-      console.log(`Season stats cache ready (${currentSeason}-${String(currentSeason + 1).slice(2)})`);
-    } catch { console.log('Season stats pre-warm skipped (NBA API unavailable)'); }
+    const { readdirSync } = await import('fs');
+    const logPattern = /^gamelogs_nba_(\d+)_(\d+)\.json$/;
+    const toPrewarm = readdirSync(CACHE_DIR)
+      .map(f => f.match(logPattern))
+      .filter(Boolean)
+      .filter(m => !existsDisk(`seasonstats_${m[1]}_${m[2]}`))
+      .map(m => ({ id: Number(m[1]), season: Number(m[2]) }));
+
+    console.log(`Pre-warming seasonstats for ${toPrewarm.length} players from cached game logs...`);
+    let swDone = 0;
+    for (const { id, season } of toPrewarm) {
+      await getPlayerSeasonStats(season, id).catch(() => {});
+      swDone++;
+    }
+    console.log(`Season stats pre-warm complete: ${swDone} players`);
 
     // Step 3: cache every player profile + career stats individually (like draft classes)
     // Skips already-cached players so restarts pick up where they left off
