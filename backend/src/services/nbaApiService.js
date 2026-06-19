@@ -1363,50 +1363,44 @@ function espnTeamSlug(abbr) { return ESPN_TEAM_SLUGS[abbr] ?? abbr.toLowerCase()
 export async function getTeamSeasonStats(season, teamAbbr) {
   const appAbbr  = teamAbbr.toUpperCase();
   const slug     = espnTeamSlug(appAbbr);
-  const cacheKey = `teamstats_espn_${appAbbr}`;
+  const cacheKey = `teamstats_espn_${appAbbr}_v2`;
 
   const cached = readDisk(cacheKey);
   if (cached !== undefined) return cached;
 
-  try {
-    const { data } = await espnClient.get(
-      `/apis/site/v2/sports/basketball/nba/teams/${slug}/statistics`
-    );
-
-    const cats = data.results?.stats?.categories ?? [];
-    const statsMap = {};
-    cats.forEach(c => c.stats.forEach(s => {
-      // Only take the per-game (float) values, skip raw totals
-      if (!statsMap[s.abbreviation] && typeof s.value === 'number' && !Number.isInteger(s.value)) {
-        statsMap[s.abbreviation] = s.value;
-      } else if (!statsMap[s.abbreviation]) {
-        statsMap[s.abbreviation] = s.value;
-      }
-    }));
-
-    // Resolve per-game values by display name to avoid duplicate abbrev collisions
+  function parseStats(data) {
+    const cats = data?.results?.stats?.categories ?? [];
     function getStat(cat, name) {
       const c = cats.find(c2 => c2.name === cat);
       return c?.stats.find(s => s.name === name)?.value ?? 0;
     }
+    const gp = getStat('general', 'gamesPlayed') || 0;
+    if (!gp) return null;
+    return {
+      GP:   gp,
+      PTS:  getStat('offensive', 'avgPoints'),
+      REB:  getStat('general',   'avgRebounds'),
+      AST:  getStat('offensive', 'avgAssists'),
+      TOV:  getStat('offensive', 'avgTurnovers'),
+      STL:  getStat('defensive', 'avgSteals'),
+      BLK:  getStat('defensive', 'avgBlocks'),
+      OREB: getStat('offensive', 'avgOffensiveRebounds'),
+      DREB: getStat('defensive', 'avgDefensiveRebounds'),
+      FGPct: getStat('offensive', 'fieldGoalPct') / 100,
+      TPPct: getStat('offensive', 'threePointFieldGoalPct') / 100,
+      FTPct: getStat('offensive', 'freeThrowPct') / 100,
+    };
+  }
+
+  try {
+    const [regRes, poRes] = await Promise.allSettled([
+      espnClient.get(`/apis/site/v2/sports/basketball/nba/teams/${slug}/statistics`, { params: { seasontype: 2 } }),
+      espnClient.get(`/apis/site/v2/sports/basketball/nba/teams/${slug}/statistics`, { params: { seasontype: 3 } }),
+    ]);
 
     const result = {
-      regular: {
-        GP:    getStat('general',  'gamesPlayed') || Math.round(getStat('general', 'GP')) || 0,
-        PTS:   getStat('offensive', 'avgPoints'),
-        REB:   getStat('general',  'avgRebounds'),
-        AST:   getStat('offensive', 'avgAssists'),
-        TOV:   getStat('offensive', 'avgTurnovers'),
-        STL:   getStat('defensive', 'avgSteals'),
-        BLK:   getStat('defensive', 'avgBlocks'),
-        OREB:  getStat('offensive', 'avgOffensiveRebounds'),
-        DREB:  getStat('defensive', 'avgDefensiveRebounds'),
-        FGPct: getStat('offensive', 'fieldGoalPct') / 100,
-        TPPct: getStat('offensive', 'threePointFieldGoalPct') / 100,
-        FTPct: getStat('offensive', 'freeThrowPct') / 100,
-        PlusMinus: 0,
-      },
-      playoffs: null,
+      regular:  regRes.status === 'fulfilled' ? parseStats(regRes.value.data) : null,
+      playoffs: poRes.status  === 'fulfilled' ? parseStats(poRes.value.data)  : null,
     };
 
     writeDisk(cacheKey, result, TTL_SEASON);
