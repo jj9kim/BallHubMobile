@@ -232,29 +232,38 @@ function CareerStatsCard({ career }: { career: any[] }) {
 export default function PlayerScreen({ route }: Props) {
   const { playerId, fallback } = route.params;
 
-  const [player,      setPlayer]      = useState<Player | null>(null);
-  const [stats,       setStats]       = useState<PlayerStats | null>(null);
-  const [playoffStats,setPlayoffStats]= useState<PlayerStats | null>(null);
-  const [logs,        setLogs]        = useState<PlayerGameStats[]>([]);
-  const [career,      setCareer]      = useState<any[]>([]);
-  const [loading,     setLoading]     = useState(true);
-  const [activeTab,   setActiveTab]   = useState<Tab>('Stats');
-  const [showPlayoffs,setShowPlayoffs]= useState(false);
+  const [player,       setPlayer]       = useState<Player | null>(null);
+  const [stats,        setStats]        = useState<PlayerStats | null>(null);
+  const [playoffStats, setPlayoffStats] = useState<PlayerStats | null>(null);
+  const [logs,         setLogs]         = useState<PlayerGameStats[]>([]);
+  const [career,       setCareer]       = useState<any[]>([]);
+  const [loading,      setLoading]      = useState(true);  // bio + career only
+  const [statsLoading, setStatsLoading] = useState(true);  // season stats separately
+  const [activeTab,    setActiveTab]    = useState<Tab>('Stats');
+  const [showPlayoffs, setShowPlayoffs] = useState(false);
 
   useEffect(() => {
     const safe = <T,>(p: Promise<T>): Promise<T | null> => p.catch(() => null);
+
+    // Fast path: bio + career — these are always cached, loads in <100ms
     Promise.all([
       safe(NBAService.getPlayerById(playerId)),
-      safe(NBAService.getPlayerSeasonStats(playerId)),
       safe(NBAService.getPlayerCareerStats(playerId)),
-      safe(NBAService.getPlayerPlayoffStats(playerId)),
-    ]).then(([pRes, sRes, careerRes, poRes]) => {
+    ]).then(([pRes, careerRes]) => {
       if (pRes?.player) setPlayer(pRes.player);
-      setStats(sRes?.stats ?? null);
       setCareer(careerRes?.seasons ?? []);
-      setPlayoffStats(poRes?.stats ?? null);
     }).catch(() => {}).finally(() => setLoading(false));
 
+    // Slow path: season stats (may need NBA.com game log fetch) — independent spinner
+    Promise.all([
+      safe(NBAService.getPlayerSeasonStats(playerId)),
+      safe(NBAService.getPlayerPlayoffStats(playerId)),
+    ]).then(([sRes, poRes]) => {
+      setStats(sRes?.stats ?? null);
+      setPlayoffStats(poRes?.stats ?? null);
+    }).catch(() => {}).finally(() => setStatsLoading(false));
+
+    // Game log tab loads independently
     safe(NBAService.getPlayerGameLogs(playerId))
       .then(lRes => setLogs(lRes?.logs ?? []));
   }, [playerId]);
@@ -326,7 +335,9 @@ export default function PlayerScreen({ route }: Props) {
                 </TouchableOpacity>
               )}
             </View>
-            {(showPlayoffs ? playoffStats : stats) ? (
+            {statsLoading ? (
+              <ActivityIndicator color="#fff" style={{ marginVertical: 20 }} />
+            ) : (showPlayoffs ? playoffStats : stats) ? (
               <View style={{ marginTop: 14 }}>
                 {/* Big 3 */}
                 <View style={{ flexDirection: 'row', marginBottom: 4 }}>
