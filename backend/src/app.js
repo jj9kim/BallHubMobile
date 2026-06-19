@@ -39,7 +39,29 @@ app.listen(PORT, async () => {
   Promise.allSettled([
     getStandings(2025), getSchedule(2025),
     ...ALL_TEAMS.map(t => getTeamRoster(t)),
-  ]).then(() => console.log('Cache warmed: standings + schedule + all rosters'));
+  ]).then(async () => {
+    console.log('Cache warmed: standings + schedule + all rosters');
+
+    // Pre-warm game logs + seasonstats for every active roster player.
+    // These are the players shown in the Stats tab — they must be fast.
+    const season = _season;
+    const allRosters = await Promise.allSettled(ALL_TEAMS.map(t => getTeamRoster(t)));
+    const rosterPlayers = allRosters
+      .flatMap(r => r.status === 'fulfilled' ? (Array.isArray(r.value) ? r.value : r.value.players ?? []) : []);
+    const uniqueIds = [...new Set(rosterPlayers.map(p => p.PlayerID).filter(Boolean))];
+
+    let warmed = 0;
+    for (const id of uniqueIds) {
+      if (!existsDisk(`gamelogs_nba_${id}_${season}`)) {
+        await getPlayerGameLogs(season, id).catch(() => {});
+      }
+      if (!existsDisk(`seasonstats_${id}_${season}`)) {
+        await getPlayerSeasonStats(season, id).catch(() => {});
+        warmed++;
+      }
+    }
+    if (warmed > 0) console.log(`Roster player stats pre-warm complete: ${warmed} players`);
+  });
 
   // Pre-warm draft classes then player profiles — sequential to avoid rate limits
   (async () => {

@@ -1162,8 +1162,13 @@ function StatsTab({ teamKey }: { teamKey: string }) {
           ];
           const col = COLS.find(c => c.key === sortKey)!;
           const sorted = [...rosterStats]
-            .filter(r => r.stats)
-            .sort((a, b) => col.getValue(b.stats) - col.getValue(a.stats));
+            .sort((a, b) => {
+              // Players with no stats go to the bottom
+              if (!a.stats && !b.stats) return 0;
+              if (!a.stats) return 1;
+              if (!b.stats) return -1;
+              return col.getValue(b.stats) - col.getValue(a.stats);
+            });
 
           return (
             <>
@@ -1178,6 +1183,7 @@ function StatsTab({ teamKey }: { teamKey: string }) {
                 ))}
               </View>
               {sorted.map(({ player, stats }, i) => {
+                const d = '—';
                 const fmtVal = (v: number, isPercent = false) =>
                   isPercent ? (v * 100).toFixed(1) + '%' : v.toFixed(1);
                 return (
@@ -1188,18 +1194,18 @@ function StatsTab({ teamKey }: { teamKey: string }) {
                     activeOpacity={0.7}
                   >
                     <View style={s.psrName}>
-                      <Text style={{ color: '#fff', fontSize: 12, fontWeight: '600' }} numberOfLines={1}>
+                      <Text style={{ color: stats ? '#fff' : '#444', fontSize: 12, fontWeight: '600' }} numberOfLines={1}>
                         {player.LastName}
                       </Text>
                       <Text style={{ color: '#555', fontSize: 10 }}>{player.Position}</Text>
                     </View>
-                    <Text style={s.psrStat}>{fmtVal(stats.Points)}</Text>
-                    <Text style={s.psrStat}>{fmtVal(stats.Rebounds)}</Text>
-                    <Text style={s.psrStat}>{fmtVal(stats.Assists)}</Text>
-                    <Text style={s.psrStat}>{fmtVal(stats.Steals)}</Text>
-                    <Text style={s.psrStat}>{fmtVal(stats.BlockedShots)}</Text>
-                    <Text style={s.psrStat}>{fmtVal(stats.FieldGoalsPercentage, true)}</Text>
-                    <Text style={[s.psrStat, { color: '#666' }]}>{stats.Games}</Text>
+                    <Text style={s.psrStat}>{stats ? fmtVal(stats.Points)                      : d}</Text>
+                    <Text style={s.psrStat}>{stats ? fmtVal(stats.Rebounds)                    : d}</Text>
+                    <Text style={s.psrStat}>{stats ? fmtVal(stats.Assists)                     : d}</Text>
+                    <Text style={s.psrStat}>{stats ? fmtVal(stats.Steals)                      : d}</Text>
+                    <Text style={s.psrStat}>{stats ? fmtVal(stats.BlockedShots)                : d}</Text>
+                    <Text style={s.psrStat}>{stats ? fmtVal(stats.FieldGoalsPercentage, true)  : d}</Text>
+                    <Text style={[s.psrStat, { color: '#666' }]}>{stats ? stats.Games : d}</Text>
                   </TouchableOpacity>
                 );
               })}

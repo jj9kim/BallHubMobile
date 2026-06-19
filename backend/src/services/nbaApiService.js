@@ -66,7 +66,7 @@ function fileKey(key) {
   return key.replace(/[^a-zA-Z0-9]/g, '_') + '.json';
 }
 
-function readDisk(key, { allowStale = false } = {}) {
+export function readDisk(key, { allowStale = false } = {}) {
   const file = join(CACHE_DIR, fileKey(key));
   if (!existsSync(file)) return undefined;
   try {
