@@ -1562,8 +1562,18 @@ export async function getPlayerCareerStats(playerId) {
 
 // ── NBA ID map ────────────────────────────────────────────────────────────────
 // ── Retired vs active TTL helper ─────────────────────────────────────────────
-// Current season end year (2025-26 → 2026). Update each season.
-const CURRENT_SEASON_YEAR = 2026;
+// Dynamically compute the "active" season year.
+// NBA season runs Oct→Jun. Season year = the calendar year it ENDS.
+// Jul-Sep = offseason: no active season, cache everything as permanent.
+function activeSeasonYear() {
+  const m = new Date().getMonth() + 1; // 1-12
+  const y = new Date().getFullYear();
+  if (m >= 10) return y + 1; // Oct-Dec: next year's season is starting
+  if (m <= 6)  return y;     // Jan-Jun: this year's season is ending
+  return null;               // Jul-Sep: offseason, no active season
+}
+const CURRENT_SEASON_YEAR = activeSeasonYear() ?? 9999; // 9999 = offseason, nothing is "current"
+
 const TTL_FOREVER  = 86400 * 365 * 10; // 10 years — effectively permanent
 const TTL_BIO      = 86400 * 30;       // 30 days for active player bio
 const TTL_CAREER   = 86400 * 7;        // 7 days for active career stats
