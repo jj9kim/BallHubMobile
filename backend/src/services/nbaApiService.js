@@ -1337,8 +1337,7 @@ async function getNbaGameLogs(season, playerId) {
   });
 
   // Past seasons never change — cache forever. Current season refreshes daily.
-  const isCurrentSeason = season === CURRENT_SEASON_YEAR - 1;
-  const logTtl = isCurrentSeason ? TTL_SEASON : TTL_FOREVER;
+  const logTtl = isSeasonComplete(season) ? TTL_FOREVER : TTL_SEASON;
 
   const [regularData, playoffData, playInData] = await Promise.allSettled([
     nbFetch('/stats/playergamelog', { PlayerID: playerId, Season: seasonStr, SeasonType: 'Regular Season' }, logTtl, `gamelogs_nba_${playerId}_${season}`),
@@ -1540,8 +1539,7 @@ export async function getPlayerSeasonStats(season, playerId) {
   };
 
   // Cache per-player: past seasons are permanent, current season refreshes daily
-  const isCurrentSeason = season === CURRENT_SEASON_YEAR - 1;
-  writeDisk(perPlayerKey, result, isCurrentSeason ? TTL_SEASON : TTL_FOREVER);
+  writeDisk(perPlayerKey, result, isSeasonComplete(season) ? TTL_FOREVER : TTL_SEASON);
   return result;
 }
 
@@ -1632,19 +1630,32 @@ export async function getPlayerCareerStats(playerId) {
 // Dynamically compute the "active" season year.
 // NBA season runs Oct→Jun. Season year = the calendar year it ENDS.
 // Jul-Sep = offseason: no active season, cache everything as permanent.
-function activeSeasonYear() {
-  const m = new Date().getMonth() + 1; // 1-12
-  const y = new Date().getFullYear();
-  if (m >= 10) return y + 1; // Oct-Dec: next year's season is starting
-  if (m <= 6)  return y;     // Jan-Jun: this year's season is ending
-  return null;               // Jul-Sep: offseason, no active season
-}
-const CURRENT_SEASON_YEAR = activeSeasonYear() ?? 9999; // 9999 = offseason, nothing is "current"
-
 const TTL_FOREVER  = 86400 * 365 * 10; // 10 years — effectively permanent
 const TTL_BIO      = 86400 * 30;       // 30 days for active player bio
 const TTL_CAREER   = 86400 * 7;        // 7 days for active career stats
 const TTL_SEASON   = 86400;            // 1 day for active season stats / game logs
+
+// A season (e.g. 2025 = 2024-25) is complete once we're past its end year.
+// season 2025 ends June 2025 → complete any time in 2026+
+// season 2026 ends June 2026 → complete from July 2026 onwards
+function isSeasonComplete(season) {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = now.getMonth() + 1; // 1-12
+  if (y > season) return true;          // clearly past
+  if (y === season && m >= 8) return true; // Aug+ of end year = offseason
+  return false;
+}
+
+// Keep for retired-player check
+function activeSeasonYear() {
+  const m = new Date().getMonth() + 1;
+  const y = new Date().getFullYear();
+  if (m >= 10) return y + 1;
+  if (m <= 6)  return y;
+  return null;
+}
+const CURRENT_SEASON_YEAR = activeSeasonYear() ?? 9999;
 
 function isRetiredFromCareer(seasons) {
   if (!seasons?.length) return false;
