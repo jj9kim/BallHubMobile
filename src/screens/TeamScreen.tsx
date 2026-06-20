@@ -1035,19 +1035,36 @@ function DraftTab({ teamKey }: { teamKey: string }) {
 
 type SortKey = 'PTS' | 'REB' | 'AST' | 'STL' | 'BLK' | 'FG' | 'GP';
 
+function RankBadge({ rank }: { rank?: number }) {
+  if (!rank) return null;
+  const color = rank === 1 ? '#f5c518' : rank <= 5 ? '#4caf50' : rank <= 15 ? '#aaa' : '#e05a5a';
+  return (
+    <View style={{ backgroundColor: color + '22', borderRadius: 5, paddingHorizontal: 5, paddingVertical: 1, marginLeft: 8 }}>
+      <Text style={{ color, fontSize: 11, fontWeight: '700' }}>#{rank}</Text>
+    </View>
+  );
+}
+
 function StatsTab({ teamKey }: { teamKey: string }) {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const [regular,     setRegular]     = useState<any>(null);
-  const [playoffs,    setPlayoffs]    = useState<any>(null);
-  const [rosterStats, setRosterStats] = useState<{ player: any; stats: any }[]>([]);
-  const [loading,     setLoading]     = useState(true);
+  const [regular,      setRegular]      = useState<any>(null);
+  const [playoffs,     setPlayoffs]     = useState<any>(null);
+  const [regularRanks, setRegularRanks] = useState<any>({});
+  const [playoffRanks, setPlayoffRanks] = useState<any>({});
+  const [rosterStats,  setRosterStats]  = useState<{ player: any; stats: any }[]>([]);
+  const [loading,      setLoading]      = useState(true);
   const [loadingRoster, setLoadingRoster] = useState(true);
-  const [view,        setView]        = useState<'regular' | 'playoffs'>('regular');
-  const [sortKey,     setSortKey]     = useState<SortKey>('PTS');
+  const [view,        setView]          = useState<'regular' | 'playoffs'>('regular');
+  const [sortKey,     setSortKey]       = useState<SortKey>('PTS');
 
   useEffect(() => {
     NBAService.getTeamSeasonStats(teamKey)
-      .then(res => { setRegular(res.regular); setPlayoffs(res.playoffs); })
+      .then(res => {
+        setRegular(res.regular);
+        setPlayoffs(res.playoffs);
+        setRegularRanks(res.regularRanks ?? {});
+        setPlayoffRanks(res.playoffRanks ?? {});
+      })
       .catch(() => {})
       .finally(() => setLoading(false));
     NBAService.getTeamPlayerStats(teamKey)
@@ -1059,7 +1076,8 @@ function StatsTab({ teamKey }: { teamKey: string }) {
   const fmtPct = (v: number) => v ? (v * 100).toFixed(1) + '%' : '—';
   const fmt    = (v: number, d = 1) => v != null ? v.toFixed(d) : '—';
 
-  const st = view === 'playoffs' ? playoffs : regular;
+  const st    = view === 'playoffs' ? playoffs : regular;
+  const ranks = view === 'playoffs' ? playoffRanks : regularRanks;
 
   return (
     <ScrollView contentContainerStyle={{ paddingHorizontal: 12, paddingTop: 12, paddingBottom: 40, gap: 10 }}>
@@ -1088,14 +1106,15 @@ function StatsTab({ teamKey }: { teamKey: string }) {
           <View style={s.card}>
             <View style={{ flexDirection: 'row' }}>
               {[
-                { val: fmt(st.PTS),  label: 'PTS' },
-                { val: fmt(st.REB),  label: 'REB' },
-                { val: fmt(st.AST),  label: 'AST' },
-                { val: fmt(st.TOV),  label: 'TOV' },
-              ].map(({ val, label }, i) => (
+                { val: fmt(st.PTS), label: 'PTS', rankKey: 'PTS' },
+                { val: fmt(st.REB), label: 'REB', rankKey: 'REB' },
+                { val: fmt(st.AST), label: 'AST', rankKey: 'AST' },
+                { val: fmt(st.TOV), label: 'TOV', rankKey: 'TOV' },
+              ].map(({ val, label, rankKey }, i) => (
                 <View key={label} style={[s.bigStatBox, i > 0 && { borderLeftWidth: 1, borderLeftColor: '#2a2a2a' }]}>
                   <Text style={s.bigStatVal}>{val}</Text>
                   <Text style={s.bigStatLbl}>{label}</Text>
+                  {ranks[rankKey] && <Text style={{ color: ranks[rankKey] <= 5 ? '#4caf50' : ranks[rankKey] <= 15 ? '#aaa' : '#e05a5a', fontSize: 10, fontWeight: '700', marginTop: 2 }}>#{ranks[rankKey]}</Text>}
                 </View>
               ))}
             </View>
@@ -1105,11 +1124,11 @@ function StatsTab({ teamKey }: { teamKey: string }) {
           <View style={s.card}>
             <Text style={s.sectionLabel}>Shooting</Text>
             <View style={{ marginTop: 14 }}>
-              <View style={s.psRow}><Text style={s.psLabel}>Field Goal %</Text><Text style={s.psValue}>{fmtPct(st.FGPct)}</Text></View>
+              <View style={s.psRow}><Text style={s.psLabel}>Field Goal %</Text><View style={{ flexDirection: 'row', alignItems: 'center' }}><Text style={s.psValue}>{fmtPct(st.FGPct)}</Text><RankBadge rank={ranks.FGPct} /></View></View>
               <View style={s.divider} />
-              <View style={s.psRow}><Text style={s.psLabel}>Three Point %</Text><Text style={s.psValue}>{fmtPct(st.TPPct)}</Text></View>
+              <View style={s.psRow}><Text style={s.psLabel}>Three Point %</Text><View style={{ flexDirection: 'row', alignItems: 'center' }}><Text style={s.psValue}>{fmtPct(st.TPPct)}</Text><RankBadge rank={ranks.TPPct} /></View></View>
               <View style={s.divider} />
-              <View style={s.psRow}><Text style={s.psLabel}>Free Throw %</Text><Text style={s.psValue}>{fmtPct(st.FTPct)}</Text></View>
+              <View style={s.psRow}><Text style={s.psLabel}>Free Throw %</Text><View style={{ flexDirection: 'row', alignItems: 'center' }}><Text style={s.psValue}>{fmtPct(st.FTPct)}</Text><RankBadge rank={ranks.FTPct} /></View></View>
             </View>
           </View>
 
@@ -1117,11 +1136,11 @@ function StatsTab({ teamKey }: { teamKey: string }) {
           <View style={s.card}>
             <Text style={s.sectionLabel}>Rebounds</Text>
             <View style={{ marginTop: 14 }}>
-              <View style={s.psRow}><Text style={s.psLabel}>Total</Text><Text style={s.psValue}>{fmt(st.REB)}</Text></View>
+              <View style={s.psRow}><Text style={s.psLabel}>Total</Text><View style={{ flexDirection: 'row', alignItems: 'center' }}><Text style={s.psValue}>{fmt(st.REB)}</Text><RankBadge rank={ranks.REB} /></View></View>
               <View style={s.divider} />
-              <View style={s.psRow}><Text style={s.psLabel}>Offensive</Text><Text style={s.psValue}>{fmt(st.OREB)}</Text></View>
+              <View style={s.psRow}><Text style={s.psLabel}>Offensive</Text><View style={{ flexDirection: 'row', alignItems: 'center' }}><Text style={s.psValue}>{fmt(st.OREB)}</Text><RankBadge rank={ranks.OREB} /></View></View>
               <View style={s.divider} />
-              <View style={s.psRow}><Text style={s.psLabel}>Defensive</Text><Text style={s.psValue}>{fmt(st.DREB)}</Text></View>
+              <View style={s.psRow}><Text style={s.psLabel}>Defensive</Text><View style={{ flexDirection: 'row', alignItems: 'center' }}><Text style={s.psValue}>{fmt(st.DREB)}</Text><RankBadge rank={ranks.DREB} /></View></View>
             </View>
           </View>
 
@@ -1129,11 +1148,11 @@ function StatsTab({ teamKey }: { teamKey: string }) {
           <View style={s.card}>
             <Text style={s.sectionLabel}>Defense & Other</Text>
             <View style={{ marginTop: 14 }}>
-              <View style={s.psRow}><Text style={s.psLabel}>Steals</Text><Text style={s.psValue}>{fmt(st.STL)}</Text></View>
+              <View style={s.psRow}><Text style={s.psLabel}>Steals</Text><View style={{ flexDirection: 'row', alignItems: 'center' }}><Text style={s.psValue}>{fmt(st.STL)}</Text><RankBadge rank={ranks.STL} /></View></View>
               <View style={s.divider} />
-              <View style={s.psRow}><Text style={s.psLabel}>Blocks</Text><Text style={s.psValue}>{fmt(st.BLK)}</Text></View>
+              <View style={s.psRow}><Text style={s.psLabel}>Blocks</Text><View style={{ flexDirection: 'row', alignItems: 'center' }}><Text style={s.psValue}>{fmt(st.BLK)}</Text><RankBadge rank={ranks.BLK} /></View></View>
               <View style={s.divider} />
-              <View style={s.psRow}><Text style={s.psLabel}>Turnovers</Text><Text style={s.psValue}>{fmt(st.TOV)}</Text></View>
+              <View style={s.psRow}><Text style={s.psLabel}>Turnovers</Text><View style={{ flexDirection: 'row', alignItems: 'center' }}><Text style={s.psValue}>{fmt(st.TOV)}</Text><RankBadge rank={ranks.TOV} /></View></View>
               <View style={s.divider} />
               <View style={s.psRow}><Text style={s.psLabel}>Plus / Minus</Text><Text style={[s.psValue, { color: st.PlusMinus >= 0 ? '#4caf50' : '#e05a5a' }]}>{st.PlusMinus >= 0 ? '+' : ''}{fmt(st.PlusMinus)}</Text></View>
               <View style={s.divider} />

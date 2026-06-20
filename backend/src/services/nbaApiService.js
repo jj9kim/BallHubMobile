@@ -1360,54 +1360,112 @@ async function getNbaGameLogs(season, playerId) {
 const ESPN_TEAM_SLUGS = { UTA:'utah', NOP:'no', GSW:'gs', NY:'ny', SA:'sa' };
 function espnTeamSlug(abbr) { return ESPN_TEAM_SLUGS[abbr] ?? abbr.toLowerCase(); }
 
+const ALL_NBA_TEAMS = [
+  'ATL','BOS','BKN','CHA','CHI','CLE','DAL','DEN','DET','GSW',
+  'HOU','IND','LAC','LAL','MEM','MIA','MIL','MIN','NOP','NY',
+  'OKC','ORL','PHI','PHO','POR','SAC','SA','TOR','UTA','WAS',
+];
+
+function parseTeamStats(data) {
+  const cats = data?.results?.stats?.categories ?? [];
+  function getStat(cat, name) {
+    const c = cats.find(c2 => c2.name === cat);
+    return c?.stats.find(s => s.name === name)?.value ?? 0;
+  }
+  const gp = getStat('general', 'gamesPlayed') || 0;
+  if (!gp) return null;
+  return {
+    GP:    gp,
+    PTS:   getStat('offensive', 'avgPoints'),
+    REB:   getStat('general',   'avgRebounds'),
+    AST:   getStat('offensive', 'avgAssists'),
+    TOV:   getStat('offensive', 'avgTurnovers'),
+    STL:   getStat('defensive', 'avgSteals'),
+    BLK:   getStat('defensive', 'avgBlocks'),
+    OREB:  getStat('offensive', 'avgOffensiveRebounds'),
+    DREB:  getStat('defensive', 'avgDefensiveRebounds'),
+    FGPct: getStat('offensive', 'fieldGoalPct') / 100,
+    TPPct: getStat('offensive', 'threePointFieldGoalPct') / 100,
+    FTPct: getStat('offensive', 'freeThrowPct') / 100,
+  };
+}
+
+// Fetch all 30 teams, compute per-stat rankings (1=best), cache result
+async function getLeagueTeamRankings(seasonType = 2) {
+  const cacheKey = `league_team_rankings_st${seasonType}`;
+  const cached = readDisk(cacheKey);
+  if (cached !== undefined) return cached;
+
+  const results = await Promise.allSettled(
+    ALL_NBA_TEAMS.map(async abbr => {
+      const slug = espnTeamSlug(abbr);
+      const { data } = await espnClient.get(
+        `/apis/site/v2/sports/basketball/nba/teams/${slug}/statistics`,
+        { params: { seasontype: seasonType } }
+      );
+      return { abbr, stats: parseTeamStats(data) };
+    })
+  );
+
+  const teams = results
+    .filter(r => r.status === 'fulfilled' && r.value.stats)
+    .map(r => r.value);
+
+  // For each stat, rank all teams (lower TOV = better rank, higher everything else)
+  const LOWER_IS_BETTER = new Set(['TOV']);
+  const STAT_KEYS = ['PTS','REB','AST','TOV','STL','BLK','OREB','DREB','FGPct','TPPct','FTPct'];
+
+  const rankings = {}; // { abbr: { PTS: 3, REB: 12, ... } }
+  for (const key of STAT_KEYS) {
+    const sorted = [...teams].sort((a, b) =>
+      LOWER_IS_BETTER.has(key)
+        ? a.stats[key] - b.stats[key]   // ascending: lower = rank 1
+        : b.stats[key] - a.stats[key]   // descending: higher = rank 1
+    );
+    sorted.forEach((t, i) => {
+      if (!rankings[t.abbr]) rankings[t.abbr] = {};
+      rankings[t.abbr][key] = i + 1;
+    });
+  }
+
+  writeDisk(cacheKey, rankings, TTL_SEASON);
+  return rankings;
+}
+
 export async function getTeamSeasonStats(season, teamAbbr) {
   const appAbbr  = teamAbbr.toUpperCase();
   const slug     = espnTeamSlug(appAbbr);
   const cacheKey = `teamstats_espn_${appAbbr}_v2`;
 
-  const cached = readDisk(cacheKey);
-  if (cached !== undefined) return cached;
+  const [statsRes, regRankings, poRankings] = await Promise.allSettled([
+    (async () => {
+      const cached = readDisk(cacheKey);
+      if (cached !== undefined) return cached;
+      const [regRes, poRes] = await Promise.allSettled([
+        espnClient.get(`/apis/site/v2/sports/basketball/nba/teams/${slug}/statistics`, { params: { seasontype: 2 } }),
+        espnClient.get(`/apis/site/v2/sports/basketball/nba/teams/${slug}/statistics`, { params: { seasontype: 3 } }),
+      ]);
+      const result = {
+        regular:  regRes.status === 'fulfilled' ? parseTeamStats(regRes.value.data) : null,
+        playoffs: poRes.status  === 'fulfilled' ? parseTeamStats(poRes.value.data)  : null,
+      };
+      writeDisk(cacheKey, result, TTL_SEASON);
+      return result;
+    })(),
+    getLeagueTeamRankings(2),
+    getLeagueTeamRankings(3),
+  ]);
 
-  function parseStats(data) {
-    const cats = data?.results?.stats?.categories ?? [];
-    function getStat(cat, name) {
-      const c = cats.find(c2 => c2.name === cat);
-      return c?.stats.find(s => s.name === name)?.value ?? 0;
-    }
-    const gp = getStat('general', 'gamesPlayed') || 0;
-    if (!gp) return null;
-    return {
-      GP:   gp,
-      PTS:  getStat('offensive', 'avgPoints'),
-      REB:  getStat('general',   'avgRebounds'),
-      AST:  getStat('offensive', 'avgAssists'),
-      TOV:  getStat('offensive', 'avgTurnovers'),
-      STL:  getStat('defensive', 'avgSteals'),
-      BLK:  getStat('defensive', 'avgBlocks'),
-      OREB: getStat('offensive', 'avgOffensiveRebounds'),
-      DREB: getStat('defensive', 'avgDefensiveRebounds'),
-      FGPct: getStat('offensive', 'fieldGoalPct') / 100,
-      TPPct: getStat('offensive', 'threePointFieldGoalPct') / 100,
-      FTPct: getStat('offensive', 'freeThrowPct') / 100,
-    };
-  }
+  const stats    = statsRes.status === 'fulfilled' ? statsRes.value : { regular: null, playoffs: null };
+  const regRanks = regRankings.status === 'fulfilled' ? (regRankings.value[appAbbr] ?? {}) : {};
+  const poRanks  = poRankings.status  === 'fulfilled' ? (poRankings.value[appAbbr]  ?? {}) : {};
 
-  try {
-    const [regRes, poRes] = await Promise.allSettled([
-      espnClient.get(`/apis/site/v2/sports/basketball/nba/teams/${slug}/statistics`, { params: { seasontype: 2 } }),
-      espnClient.get(`/apis/site/v2/sports/basketball/nba/teams/${slug}/statistics`, { params: { seasontype: 3 } }),
-    ]);
-
-    const result = {
-      regular:  regRes.status === 'fulfilled' ? parseStats(regRes.value.data) : null,
-      playoffs: poRes.status  === 'fulfilled' ? parseStats(poRes.value.data)  : null,
-    };
-
-    writeDisk(cacheKey, result, TTL_SEASON);
-    return result;
-  } catch (err) {
-    throw new Error(`Team stats unavailable: ${err.message}`);
-  }
+  return {
+    regular:        stats.regular,
+    playoffs:       stats.playoffs,
+    regularRanks:   regRanks,
+    playoffRanks:   poRanks,
+  };
 }
 
 // ── Player season stats ───────────────────────────────────────────────────────

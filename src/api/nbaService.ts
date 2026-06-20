@@ -178,7 +178,7 @@ export const NBAService = {
     apiFetch<{ games: Game[] }>(`/api/teams/${team}/schedule/${season}`),
 
   getTeamSeasonStats: (team: string, season = 2025) =>
-    apiFetch<{ regular: any; playoffs: any }>(`/api/teams/${team}/stats/${season}`),
+    apiFetch<{ regular: any; playoffs: any; regularRanks: any; playoffRanks: any }>(`/api/teams/${team}/stats/${season}`),
 
   getTeamPlayerStats: (team: string, season = 2025) =>
     apiFetch<{ players: { player: any; stats: any }[] }>(`/api/teams/${team}/player-stats/${season}`),
