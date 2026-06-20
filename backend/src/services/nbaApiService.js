@@ -1407,7 +1407,7 @@ async function getLeagueTeamRankings(seasonType = 2) {
   );
 
   const teams = results
-    .filter(r => r.status === 'fulfilled' && r.value.stats)
+    .filter(r => r.status === 'fulfilled' && r.value.stats && r.value.stats.GP > 0)
     .map(r => r.value);
 
   // For each stat, rank all teams (lower TOV = better rank, higher everything else)
