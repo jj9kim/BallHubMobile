@@ -1365,14 +1365,15 @@ const ALL_NBA_TEAMS = [
   'OKC','ORL','PHI','PHO','POR','SAC','SA','TOR','UTA','WAS',
 ];
 
-function parseTeamStats(data) {
+function parseTeamStats(data, maxGP = Infinity) {
   const cats = data?.results?.stats?.categories ?? [];
   function getStat(cat, name) {
     const c = cats.find(c2 => c2.name === cat);
     return c?.stats.find(s => s.name === name)?.value ?? 0;
   }
   const gp = getStat('general', 'gamesPlayed') || 0;
-  if (!gp) return null;
+  // For playoffs (maxGP=28): if ESPN returns ≥30 GP it's regular season fallback data — ignore
+  if (!gp || gp > maxGP) return null;
   return {
     GP:    gp,
     PTS:   getStat('offensive', 'avgPoints'),
@@ -1402,7 +1403,8 @@ async function getLeagueTeamRankings(seasonType = 2) {
         `/apis/site/v2/sports/basketball/nba/teams/${slug}/statistics`,
         { params: { seasontype: seasonType } }
       );
-      return { abbr, stats: parseTeamStats(data) };
+      const maxGP = seasonType === 3 ? 28 : Infinity;
+      return { abbr, stats: parseTeamStats(data, maxGP) };
     })
   );
 
@@ -1445,8 +1447,8 @@ export async function getTeamSeasonStats(season, teamAbbr) {
         espnClient.get(`/apis/site/v2/sports/basketball/nba/teams/${slug}/statistics`, { params: { seasontype: 3 } }),
       ]);
       const result = {
-        regular:  regRes.status === 'fulfilled' ? parseTeamStats(regRes.value.data) : null,
-        playoffs: poRes.status  === 'fulfilled' ? parseTeamStats(poRes.value.data)  : null,
+        regular:  regRes.status === 'fulfilled' ? parseTeamStats(regRes.value.data)       : null,
+        playoffs: poRes.status  === 'fulfilled' ? parseTeamStats(poRes.value.data, 28)   : null,
       };
       writeDisk(cacheKey, result, TTL_SEASON);
       return result;
