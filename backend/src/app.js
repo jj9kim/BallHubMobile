@@ -42,25 +42,32 @@ app.listen(PORT, async () => {
   ]).then(async () => {
     console.log('Cache warmed: standings + schedule + all rosters');
 
-    // Pre-warm game logs + seasonstats for every active roster player.
-    // These are the players shown in the Stats tab — they must be fast.
+    // Pre-warm EVERYTHING for every active roster player — bio, career, game logs, seasonstats.
+    // Roster is the source of truth for "active players". Draft class data misses undrafted
+    // players, 2nd-round picks with limited data, recent call-ups, etc.
     const season = _season;
     const allRosters = await Promise.allSettled(ALL_TEAMS.map(t => getTeamRoster(t)));
     const rosterPlayers = allRosters
       .flatMap(r => r.status === 'fulfilled' ? (Array.isArray(r.value) ? r.value : r.value.players ?? []) : []);
     const uniqueIds = [...new Set(rosterPlayers.map(p => p.PlayerID).filter(Boolean))];
 
-    let warmed = 0;
+    let rWarmed = 0, rSkipped = 0;
     for (const id of uniqueIds) {
-      if (!existsDisk(`gamelogs_nba_${id}_${season}`)) {
-        await getPlayerGameLogs(season, id).catch(() => {});
-      }
-      if (!existsDisk(`seasonstats_${id}_${season}`)) {
-        await getPlayerSeasonStats(season, id).catch(() => {});
-        warmed++;
-      }
+      const needsBio    = !existsDisk(`player_${id}`);
+      const needsCareer = !existsDisk(`career_seasons_${id}`);
+      const needsLogs   = !existsDisk(`gamelogs_nba_${id}_${season}`);
+      const needsStats  = !existsDisk(`seasonstats_${id}_${season}`);
+
+      if (!needsBio && !needsCareer && !needsLogs && !needsStats) { rSkipped++; continue; }
+
+      if (needsBio)    await getPlayerById(id).catch(() => {});
+      if (needsCareer) await getPlayerCareerStats(id).catch(() => {});
+      if (needsLogs)   await getPlayerGameLogs(season, id).catch(() => {});
+      if (needsStats)  await getPlayerSeasonStats(season, id).catch(() => {});
+      rWarmed++;
+      await new Promise(r => setTimeout(r, 400));
     }
-    if (warmed > 0) console.log(`Roster player stats pre-warm complete: ${warmed} players`);
+    console.log(`Roster pre-warm: ${rWarmed} players fully cached, ${rSkipped} already complete`);
   });
 
   // Pre-warm draft classes then player profiles — sequential to avoid rate limits
