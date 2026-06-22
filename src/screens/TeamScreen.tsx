@@ -1037,10 +1037,10 @@ type SortKey = 'PTS' | 'REB' | 'AST' | 'STL' | 'BLK' | 'FG' | 'GP';
 
 function RankBadge({ rank }: { rank?: number }) {
   if (!rank) return null;
-  const color = rank === 1 ? '#f5c518' : rank <= 5 ? '#4caf50' : rank <= 15 ? '#aaa' : '#e05a5a';
+  const color = rank === 1 ? '#fbbf24' : rank <= 5 ? '#6ee7b7' : rank <= 15 ? '#9ca3af' : '#fb7185';
   return (
-    <View style={{ backgroundColor: color + '22', borderRadius: 5, paddingHorizontal: 5, paddingVertical: 1, marginLeft: 8 }}>
-      <Text style={{ color, fontSize: 11, fontWeight: '700' }}>#{rank}</Text>
+    <View style={{ backgroundColor: color + '15', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2, marginLeft: 8, borderWidth: 1, borderColor: color + '40' }}>
+      <Text style={{ color, fontSize: 10, fontWeight: '700', letterSpacing: 0.3 }}>#{rank}</Text>
     </View>
   );
 }
@@ -1114,7 +1114,7 @@ function StatsTab({ teamKey }: { teamKey: string }) {
                 <View key={label} style={[s.bigStatBox, i > 0 && { borderLeftWidth: 1, borderLeftColor: '#2a2a2a' }]}>
                   <Text style={s.bigStatVal}>{val}</Text>
                   <Text style={s.bigStatLbl}>{label}</Text>
-                  {ranks[rankKey] && <Text style={{ color: ranks[rankKey] <= 5 ? '#4caf50' : ranks[rankKey] <= 15 ? '#aaa' : '#e05a5a', fontSize: 10, fontWeight: '700', marginTop: 2 }}>#{ranks[rankKey]}</Text>}
+                  {ranks[rankKey] && <Text style={{ color: ranks[rankKey] === 1 ? '#fbbf24' : ranks[rankKey] <= 5 ? '#6ee7b7' : ranks[rankKey] <= 15 ? '#9ca3af' : '#fb7185', fontSize: 10, fontWeight: '700', marginTop: 2, letterSpacing: 0.3 }}>#{ranks[rankKey]}</Text>}
                 </View>
               ))}
             </View>
