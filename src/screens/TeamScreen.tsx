@@ -1089,7 +1089,16 @@ function RankBadge({ rank }: { rank?: number }) {
   );
 }
 
-const POSITIONS = ['All', 'G', 'F', 'C', 'G-F', 'F-C', 'C-F'];
+function positionGroup(pos: string): string {
+  if (!pos) return 'Other';
+  const p = pos.toUpperCase();
+  if (p.includes('G')) return 'Guard';
+  if (p.includes('F')) return 'Forward';
+  if (p.includes('C')) return 'Center';
+  return 'Other';
+}
+
+const POS_FILTERS = ['All', 'Guard', 'Forward', 'Center'];
 
 function ViewAllModal({ stat, teamKey, onClose, onPlayer }: {
   stat: { label: string; players: { player: any; stats: any }[]; fmtVal: (v: number) => string; getValue: (st: any) => number };
@@ -1099,10 +1108,9 @@ function ViewAllModal({ stat, teamKey, onClose, onPlayer }: {
 }) {
   const [posFilter, setPosFilter] = useState('All');
 
-  const positions = ['All', ...Array.from(new Set(stat.players.map(p => p.player.Position).filter(Boolean)))];
   const filtered = posFilter === 'All'
     ? stat.players
-    : stat.players.filter(({ player }) => player.Position === posFilter);
+    : stat.players.filter(({ player }) => positionGroup(player.Position) === posFilter);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#141414' }}>
@@ -1115,8 +1123,8 @@ function ViewAllModal({ stat, teamKey, onClose, onPlayer }: {
       </View>
 
       {/* Position filter pills */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 12, paddingVertical: 10, gap: 8 }}>
-        {positions.map(pos => (
+      <View style={{ flexDirection: 'row', paddingHorizontal: 12, paddingVertical: 10, gap: 8 }}>
+        {POS_FILTERS.map(pos => (
           <TouchableOpacity
             key={pos}
             onPress={() => setPosFilter(pos)}
@@ -1125,7 +1133,7 @@ function ViewAllModal({ stat, teamKey, onClose, onPlayer }: {
             <Text style={{ color: posFilter === pos ? '#000' : '#aaa', fontWeight: '600', fontSize: 13 }}>{pos}</Text>
           </TouchableOpacity>
         ))}
-      </ScrollView>
+      </View>
 
       {/* Player list */}
       <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 40 }}>
