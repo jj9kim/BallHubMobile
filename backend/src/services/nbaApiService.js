@@ -827,7 +827,14 @@ export async function getSchedule(season) {
   // Fetch any dates not yet in ESPN cache, in parallel batches
   const missing = allDates.filter(date => readDisk(`espn_scoreboard_${date}`) === undefined);
 
-  if (missing.length > 0) {
+  // If >80% already cached, return immediately (fast UX) and fetch rest in background
+  const cacheRatio = missing.length / (allDates.length || 1);
+  if (missing.length > 0 && cacheRatio < 0.2) {
+    // Return with cached data, fetch updates async in background
+    setImmediate(() => {
+      Promise.all(missing.map(date => getEspnGamesByDate(date).catch(() => []))).catch(() => {});
+    });
+  } else if (missing.length > 0) {
     // Fetch in parallel (ESPN handles it fine)
     await Promise.all(missing.map(date => getEspnGamesByDate(date).catch(() => [])));
   }
