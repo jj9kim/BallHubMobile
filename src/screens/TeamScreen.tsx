@@ -1240,17 +1240,18 @@ function StatsTab({ teamKey }: { teamKey: string }) {
           return (
             <View key={stat.key} style={s.card}>
               <Text style={s.sectionLabel}>{stat.label}</Text>
-              <View style={{ marginTop: 12, gap: 1 }}>
+              <View style={{ marginTop: 12, flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -8 }}>
                 {displayPlayers.map(({ player, stats }, i) => (
-                  <PlayerStatRowComp
-                    key={player.PlayerID}
-                    player={player}
-                    stats={stats}
-                    statValue={fmtVal(stat.getValue(stats))}
-                    teamKey={teamKey}
-                    isFirst={i === 0}
-                    onPress={() => navigation.navigate('PlayerProfile', { playerId: player.PlayerID })}
-                  />
+                  <View key={player.PlayerID} style={{ width: '50%', paddingHorizontal: 8 }}>
+                    <PlayerStatRowComp
+                      player={player}
+                      stats={stats}
+                      statValue={fmtVal(stat.getValue(stats))}
+                      teamKey={teamKey}
+                      isFirst={true}
+                      onPress={() => navigation.navigate('PlayerProfile', { playerId: player.PlayerID })}
+                    />
+                  </View>
                 ))}
               </View>
 
@@ -1269,13 +1270,9 @@ function StatsTab({ teamKey }: { teamKey: string }) {
         };
 
         return (
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -6, gap: 12 }}>
-            {STAT_CATEGORIES.map(stat => (
-              <View key={stat.key} style={{ width: '50%', paddingHorizontal: 6 }}>
-                {renderStatCard(stat)}
-              </View>
-            ))}
-          </View>
+          <>
+            {STAT_CATEGORIES.map(stat => renderStatCard(stat))}
+          </>
         );
       })()}
     </ScrollView>
