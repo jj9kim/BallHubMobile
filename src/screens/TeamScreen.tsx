@@ -1170,64 +1170,94 @@ function StatsTab({ teamKey }: { teamKey: string }) {
         ) : rosterStats.length === 0 ? (
           <Text style={[s.emptyText, { marginTop: 12 }]}>No player data</Text>
         ) : (() => {
-          const COLS: { key: SortKey; label: string; getValue: (st: any) => number }[] = [
+          const STAT_TABS: { key: SortKey | 'ALL'; label: string; getValue?: (st: any) => number }[] = [
             { key: 'PTS', label: 'PTS', getValue: s => s?.Points ?? 0 },
             { key: 'REB', label: 'REB', getValue: s => s?.Rebounds ?? 0 },
             { key: 'AST', label: 'AST', getValue: s => s?.Assists ?? 0 },
             { key: 'STL', label: 'STL', getValue: s => s?.Steals ?? 0 },
             { key: 'BLK', label: 'BLK', getValue: s => s?.BlockedShots ?? 0 },
-            { key: 'FG',  label: 'FG%', getValue: s => s?.FieldGoalsPercentage ?? 0 },
-            { key: 'GP',  label: 'GP',  getValue: s => s?.Games ?? 0 },
+            { key: 'ALL', label: 'All', getValue: undefined },
           ];
-          const col = COLS.find(c => c.key === sortKey)!;
-          const sorted = [...rosterStats]
-            .sort((a, b) => {
-              // Players with no stats go to the bottom
-              if (!a.stats && !b.stats) return 0;
-              if (!a.stats) return 1;
-              if (!b.stats) return -1;
-              return col.getValue(b.stats) - col.getValue(a.stats);
-            });
+
+          // Get sorted list
+          const getPlayers = () => {
+            if (sortKey === 'ALL') {
+              // Return all players sorted by points
+              return [...rosterStats].sort((a, b) => {
+                if (!a.stats && !b.stats) return 0;
+                if (!a.stats) return 1;
+                if (!b.stats) return -1;
+                return (b.stats?.Points ?? 0) - (a.stats?.Points ?? 0);
+              });
+            }
+            // Return top 5 for selected stat
+            const col = STAT_TABS.find(c => c.key === sortKey)!;
+            return [...rosterStats]
+              .sort((a, b) => {
+                if (!a.stats && !b.stats) return 0;
+                if (!a.stats) return 1;
+                if (!b.stats) return -1;
+                return col.getValue!(b.stats) - col.getValue!(a.stats);
+              })
+              .slice(0, 5);
+          };
+
+          const players = getPlayers();
+          const isAllView = sortKey === 'ALL';
 
           return (
             <>
-              {/* Header */}
-              <View style={[s.psrRow, { marginTop: 10, borderBottomWidth: 1, borderBottomColor: '#2a2a2a', paddingBottom: 8 }]}>
-                <Text style={s.psrName} />
-                {COLS.map(c => (
-                  <TouchableOpacity key={c.key} style={s.psrCell} onPress={() => setSortKey(c.key)}>
-                    <Text style={[s.psrHeader, sortKey === c.key && { color: '#fff' }]}>{c.label}</Text>
-                    {sortKey === c.key && <View style={{ height: 2, backgroundColor: '#fff', borderRadius: 1, marginTop: 2 }} />}
-                  </TouchableOpacity>
-                ))}
-              </View>
-              {sorted.map(({ player, stats }, i) => {
-                const d = '—';
-                const fmtVal = (v: number, isPercent = false) =>
-                  isPercent ? (v * 100).toFixed(1) + '%' : v.toFixed(1);
-                return (
-                  <TouchableOpacity
-                    key={player.PlayerID}
-                    style={[s.psrRow, i > 0 && { borderTopWidth: 1, borderTopColor: '#1e1e1e' }, { paddingVertical: 9 }]}
-                    onPress={() => navigation.navigate('PlayerProfile', { playerId: player.PlayerID })}
-                    activeOpacity={0.7}
-                  >
-                    <View style={s.psrName}>
-                      <Text style={{ color: stats ? '#fff' : '#444', fontSize: 12, fontWeight: '600' }} numberOfLines={1}>
-                        {player.LastName}
+              {/* Stat category tabs */}
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 12, marginHorizontal: -14 }}>
+                <View style={{ flexDirection: 'row', paddingHorizontal: 14, gap: 8 }}>
+                  {STAT_TABS.map(tab => (
+                    <TouchableOpacity
+                      key={tab.key}
+                      onPress={() => setSortKey(tab.key as SortKey)}
+                      style={[
+                        s.statTab,
+                        sortKey === tab.key && s.statTabActive,
+                      ]}
+                    >
+                      <Text style={[s.statTabLabel, sortKey === tab.key && s.statTabLabelActive]}>
+                        {tab.label}
                       </Text>
-                      <Text style={{ color: '#555', fontSize: 10 }}>{player.Position}</Text>
-                    </View>
-                    <Text style={s.psrStat}>{stats ? fmtVal(stats.Points)                      : d}</Text>
-                    <Text style={s.psrStat}>{stats ? fmtVal(stats.Rebounds)                    : d}</Text>
-                    <Text style={s.psrStat}>{stats ? fmtVal(stats.Assists)                     : d}</Text>
-                    <Text style={s.psrStat}>{stats ? fmtVal(stats.Steals)                      : d}</Text>
-                    <Text style={s.psrStat}>{stats ? fmtVal(stats.BlockedShots)                : d}</Text>
-                    <Text style={s.psrStat}>{stats ? fmtVal(stats.FieldGoalsPercentage, true)  : d}</Text>
-                    <Text style={[s.psrStat, { color: '#666' }]}>{stats ? stats.Games : d}</Text>
-                  </TouchableOpacity>
-                );
-              })}
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </ScrollView>
+
+              {/* Player rows */}
+              <View style={{ marginTop: 12 }}>
+                {players.map(({ player, stats }, i) => {
+                  const d = '—';
+                  const fmtVal = (v: number, isPercent = false) =>
+                    isPercent ? (v * 100).toFixed(1) + '%' : v.toFixed(1);
+                  return (
+                    <TouchableOpacity
+                      key={player.PlayerID}
+                      style={[s.psrRow, i > 0 && { borderTopWidth: 1, borderTopColor: '#1e1e1e' }, { paddingVertical: 9 }]}
+                      onPress={() => navigation.navigate('PlayerProfile', { playerId: player.PlayerID })}
+                      activeOpacity={0.7}
+                    >
+                      <View style={s.psrName}>
+                        <Text style={{ color: stats ? '#fff' : '#444', fontSize: 12, fontWeight: '600' }} numberOfLines={1}>
+                          {player.LastName}
+                        </Text>
+                        <Text style={{ color: '#555', fontSize: 10 }}>{player.Position}</Text>
+                      </View>
+                      <Text style={s.psrStat}>{stats ? fmtVal(stats.Points) : d}</Text>
+                      <Text style={s.psrStat}>{stats ? fmtVal(stats.Rebounds) : d}</Text>
+                      <Text style={s.psrStat}>{stats ? fmtVal(stats.Assists) : d}</Text>
+                      <Text style={s.psrStat}>{stats ? fmtVal(stats.Steals) : d}</Text>
+                      <Text style={s.psrStat}>{stats ? fmtVal(stats.BlockedShots) : d}</Text>
+                      <Text style={s.psrStat}>{stats ? fmtVal(stats.FieldGoalsPercentage, true) : d}</Text>
+                      <Text style={[s.psrStat, { color: '#666' }]}>{stats ? stats.Games : d}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+              {!isAllView && <Text style={[s.emptyText, { marginTop: 12, textAlign: 'center', fontSize: 11 }]}>Showing top 5 by {sortKey}</Text>}
             </>
           );
         })()}
@@ -1342,6 +1372,12 @@ const s = StyleSheet.create({
   psrCell:        { flex: 1, alignItems: 'center' },
   psrHeader:      { color: '#555', fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.4, textAlign: 'center' },
   psrStat:        { flex: 1, color: '#ccc', fontSize: 11, fontWeight: '600', textAlign: 'center' },
+
+  // ── stat category tabs ────────────────────────────────────────────────────────
+  statTab:        { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, backgroundColor: '#242424' },
+  statTabActive:  { backgroundColor: '#fff' },
+  statTabLabel:   { color: '#777', fontSize: 11, fontWeight: '600' },
+  statTabLabelActive: { color: '#000', fontWeight: '700' },
 
   // ── standings ────────────────────────────────────────────────────────────────
   standRow:           { flexDirection: 'row', alignItems: 'center' },
