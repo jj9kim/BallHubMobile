@@ -999,9 +999,10 @@ export async function getBoxScore(gameId, gameDate = null, awayHint = null, home
 
 export async function getStandings(season = currentSeason()) {
   const seasonStr = toSeasonStr(season);
+  const ttl = adjustTtlForOffseason(86400); // 24h during season, forever during offseason
   const data = await nbFetch('/stats/leaguestandingsv3', {
     LeagueID: '00', Season: seasonStr, SeasonType: 'Regular Season',
-  }, 86400, `standings_${season}`); // Changed from 900s (15min) to 86400s (24hr)
+  }, ttl, `standings_${season}`);
 
   const rows = parseRS(data.resultSets, 'Standings');
 
@@ -1113,9 +1114,10 @@ export async function getTeamRoster(teamAbbr) {
   const teamId = TEAM_IDS[teamAbbr];
   if (!teamId) return [];
   const seasonStr = toSeasonStr(currentSeason());
+  const ttl = adjustTtlForOffseason(86400); // 24h during season, forever during offseason
   const data = await nbFetch('/stats/commonteamroster', {
     Season: seasonStr, TeamID: teamId,
-  }, 86400, `roster_${teamAbbr}`);
+  }, ttl, `roster_${teamAbbr}`);
 
   const rows = parseRS(data.resultSets, 'CommonTeamRoster');
 
@@ -1619,8 +1621,8 @@ export async function getPlayerCareerStats(playerId) {
       };
     }).sort((a, b) => a.SeasonYear - b.SeasonYear);
 
-    const ttl = isRetiredFromCareer(seasons) ? TTL_FOREVER : TTL_CAREER;
-    writeDisk(cacheKey, seasons, ttl);
+    // Career stats are pure history — never change, cache forever
+    writeDisk(cacheKey, seasons, TTL_FOREVER);
     return seasons;
   } catch {
     return [];
@@ -1633,9 +1635,9 @@ export async function getPlayerCareerStats(playerId) {
 // NBA season runs Oct→Jun. Season year = the calendar year it ENDS.
 // Jul-Sep = offseason: no active season, cache everything as permanent.
 const TTL_FOREVER  = 86400 * 365 * 10; // 10 years — effectively permanent
-const TTL_BIO      = 86400 * 30;       // 30 days for active player bio
-const TTL_CAREER   = 86400 * 7;        // 7 days for active career stats
-const TTL_SEASON   = 86400 * 7;        // 7 days for active season stats / game logs (was 1 day, too frequent)
+const TTL_BIO      = 86400 * 60;       // 60 days for player bio (physical data rarely changes)
+const TTL_CAREER   = 86400 * 365;      // 1 year (mostly unused, career stats cache forever)
+const TTL_SEASON   = 86400 * 7;        // 7 days for active season stats / game logs
 
 // A season (e.g. 2025 = 2024-25) is complete once we're past its end year.
 // season 2025 ends June 2025 → complete any time in 2026+
@@ -1658,6 +1660,17 @@ function activeSeasonYear() {
   return null;
 }
 const CURRENT_SEASON_YEAR = activeSeasonYear() ?? 9999;
+
+// Check if we're in offseason (July-Sep: no games, cache everything forever)
+function isOffseason() {
+  const m = new Date().getMonth() + 1;
+  return m >= 7 && m <= 9;
+}
+
+// Adjust TTL based on offseason — during July-Sep, cache everything forever
+function adjustTtlForOffseason(ttl) {
+  return isOffseason() ? TTL_FOREVER : ttl;
+}
 
 function isRetiredFromCareer(seasons) {
   if (!seasons?.length) return false;
