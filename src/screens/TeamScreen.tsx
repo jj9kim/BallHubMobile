@@ -1238,37 +1238,32 @@ function StatsTab({ teamKey }: { teamKey: string }) {
             stat.key === 'FG' ? (v * 100).toFixed(1) + '%' : v.toFixed(1);
 
           return (
-            <View key={stat.key} style={[s.card, { flexDirection: 'row', paddingRight: 0 }]}>
-              {/* Left column: stat label */}
-              <View style={{ width: 70, justifyContent: 'flex-start', paddingRight: 12 }}>
-                <Text style={s.sectionLabel}>{stat.label}</Text>
-              </View>
-
-              {/* Right column: player list */}
-              <View style={{ flex: 1, gap: 1 }}>
-                {displayPlayers.map(({ player, stats }) => (
-                  <PlayerStatRowComp
-                    key={player.PlayerID}
-                    player={player}
-                    stats={stats}
-                    statValue={fmtVal(stat.getValue(stats))}
-                    teamKey={teamKey}
-                    isFirst={false}
-                    onPress={() => navigation.navigate('PlayerProfile', { playerId: player.PlayerID })}
-                  />
-                ))}
-
-                {sorted.length > 5 && (
+            <View key={stat.key} style={s.card}>
+              <Text style={s.sectionLabel}>{stat.label}</Text>
+              <View style={{ marginTop: 8 }}>
+                {displayPlayers.map(({ player, stats }, i) => (
                   <TouchableOpacity
-                    style={s.viewAllBtn}
-                    onPress={() => setExpandedStat(isExpanded ? null : stat.key)}
+                    key={player.PlayerID}
+                    onPress={() => navigation.navigate('PlayerProfile', { playerId: player.PlayerID })}
+                    activeOpacity={0.7}
+                    style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 6, borderTopWidth: i === 0 ? 0 : 1, borderTopColor: '#2a2a2a' }}
                   >
-                    <Text style={s.viewAllBtnText}>
-                      {isExpanded ? 'Hide All' : `View All (${sorted.length})`}
-                    </Text>
+                    <Text style={{ color: '#fff', fontSize: 12, fontWeight: '600', flex: 1 }} numberOfLines={1}>{player.LastName}</Text>
+                    <Text style={{ color: '#6ee7b7', fontSize: 13, fontWeight: '700', marginLeft: 4 }}>{fmtVal(stat.getValue(stats))}</Text>
                   </TouchableOpacity>
-                )}
+                ))}
               </View>
+
+              {sorted.length > 5 && (
+                <TouchableOpacity
+                  style={s.viewAllBtn}
+                  onPress={() => setExpandedStat(isExpanded ? null : stat.key)}
+                >
+                  <Text style={s.viewAllBtnText}>
+                    {isExpanded ? 'Hide All' : `View All (${sorted.length})`}
+                  </Text>
+                </TouchableOpacity>
+              )}
             </View>
           );
         };
