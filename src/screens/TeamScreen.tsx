@@ -1033,7 +1033,7 @@ function DraftTab({ teamKey }: { teamKey: string }) {
   );
 }
 
-type SortKey = 'PTS' | 'REB' | 'AST' | 'STL' | 'BLK' | 'FG' | 'GP';
+type SortKey = 'PTS' | 'REB' | 'AST' | 'STL' | 'BLK' | 'FG' | 'GP' | 'FG_PCT' | 'FG3_PCT' | 'FT_PCT';
 
 // ── Player Stat Row Component ──────────────────────────────────────────────────
 function PlayerStatRowComp({ player, stats, statValue, teamKey, isFirst, onPress }: {
@@ -1285,12 +1285,15 @@ function StatsTab({ teamKey }: { teamKey: string }) {
           <Text style={[s.emptyText, { marginTop: 12 }]}>No player data</Text>
         </View>
       ) : (() => {
-        const STAT_CATEGORIES: { key: SortKey; label: string; getValue: (st: any) => number }[] = [
-          { key: 'PTS', label: 'Points', getValue: s => s?.Points ?? 0 },
-          { key: 'REB', label: 'Rebounds', getValue: s => s?.Rebounds ?? 0 },
-          { key: 'AST', label: 'Assists', getValue: s => s?.Assists ?? 0 },
-          { key: 'STL', label: 'Steals', getValue: s => s?.Steals ?? 0 },
-          { key: 'BLK', label: 'Blocks', getValue: s => s?.BlockedShots ?? 0 },
+        const STAT_CATEGORIES: { key: SortKey; label: string; getValue: (st: any) => number; fmt?: (v: number) => string }[] = [
+          { key: 'PTS',     label: 'Points',   getValue: s => s?.Points ?? 0 },
+          { key: 'REB',     label: 'Rebounds', getValue: s => s?.Rebounds ?? 0 },
+          { key: 'AST',     label: 'Assists',  getValue: s => s?.Assists ?? 0 },
+          { key: 'STL',     label: 'Steals',   getValue: s => s?.Steals ?? 0 },
+          { key: 'BLK',     label: 'Blocks',   getValue: s => s?.BlockedShots ?? 0 },
+          { key: 'FG_PCT',  label: 'FG%',      getValue: s => s?.FieldGoalsPercentage ?? 0,    fmt: v => (v * 100).toFixed(1) + '%' },
+          { key: 'FG3_PCT', label: '3P%',      getValue: s => s?.ThreePointersPercentage ?? 0, fmt: v => (v * 100).toFixed(1) + '%' },
+          { key: 'FT_PCT',  label: 'FT%',      getValue: s => s?.FreeThrowsPercentage ?? 0,    fmt: v => (v * 100).toFixed(1) + '%' },
         ];
 
         const renderStatCard = (stat: typeof STAT_CATEGORIES[0]) => {
@@ -1298,8 +1301,7 @@ function StatsTab({ teamKey }: { teamKey: string }) {
             .filter(r => r.stats)
             .sort((a, b) => stat.getValue(b.stats) - stat.getValue(a.stats));
           const top5 = sorted.slice(0, 5);
-          const fmtVal = (v: number) =>
-            stat.key === 'FG' ? (v * 100).toFixed(1) + '%' : v.toFixed(1);
+          const fmtVal = (v: number) => stat.fmt ? stat.fmt(v) : v.toFixed(1);
 
           return (
             <View key={stat.key} style={s.card}>
