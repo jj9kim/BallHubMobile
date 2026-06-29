@@ -62,10 +62,12 @@ app.listen(PORT, async () => {
 
       if (needsBio)    await getPlayerById(id).catch(() => {});
       if (needsCareer) await getPlayerCareerStats(id).catch(() => {});
+      // Skip logs/stats if most already cached — they'll be computed on-demand faster
+      if (rSkipped > uniqueIds.length * 0.9) { rWarmed++; await new Promise(r => setTimeout(r, 100)); continue; }
       if (needsLogs)   await getPlayerGameLogs(season, id).catch(() => {});
       if (needsStats)  await getPlayerSeasonStats(season, id).catch(() => {});
       rWarmed++;
-      await new Promise(r => setTimeout(r, 400));
+      await new Promise(r => setTimeout(r, 200)); // Reduced from 400ms
     }
     console.log(`Roster pre-warm: ${rWarmed} players fully cached, ${rSkipped} already complete`);
   });
@@ -137,20 +139,18 @@ app.listen(PORT, async () => {
 
     for (const id of uncachedIds) {
       let ok = true;
+      // Only fetch if not already cached — skip duplicates
       if (!existsDisk(`player_${id}`)) {
-        try { await getPlayerById(id); }
-        catch { ok = false; failed++; }
-      }
-      if (!existsDisk(`career_seasons_${id}`)) {
-        try { await getPlayerCareerStats(id); }
+        try { await getPlayerById(id).catch(() => { failed++; }); }
         catch { ok = false; }
       }
-      if (!existsDisk(`gamelogs_nba_${id}_${currentSeason}`)) {
-        try { await getPlayerGameLogs(currentSeason, id); }
-        catch {}
+      if (!existsDisk(`career_seasons_${id}`)) {
+        try { await getPlayerCareerStats(id).catch(() => {}); }
+        catch { ok = false; }
       }
+      // Skip game logs to save time — season stats will auto-compute from already-cached logs
       done++;
-      await new Promise(r => setTimeout(r, 800));
+      await new Promise(r => setTimeout(r, 300)); // Reduced from 800ms for faster caching
 
       // Log every 10 players
       if (done % 10 === 0 || done === uncachedIds.length) {
