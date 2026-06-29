@@ -1069,7 +1069,7 @@ function PlayerStatRowComp({ player, stats, statValue, teamKey, isFirst, onPress
 
       {/* Name and position */}
       <View style={s.playerStatNameCol}>
-        <Text style={s.playerStatName}>{player.LastName}</Text>
+        <Text style={s.playerStatName} numberOfLines={1}>{`${player.FirstName ?? ''} ${player.LastName ?? ''}`.trim()}</Text>
         <Text style={s.playerStatPos}>{player.Position}</Text>
       </View>
 
@@ -1086,6 +1086,65 @@ function RankBadge({ rank }: { rank?: number }) {
     <View style={{ backgroundColor: color + '15', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2, marginLeft: 8, borderWidth: 1, borderColor: color + '40' }}>
       <Text style={{ color, fontSize: 10, fontWeight: '700', letterSpacing: 0.3 }}>#{rank}</Text>
     </View>
+  );
+}
+
+const POSITIONS = ['All', 'G', 'F', 'C', 'G-F', 'F-C', 'C-F'];
+
+function ViewAllModal({ stat, teamKey, onClose, onPlayer }: {
+  stat: { label: string; players: { player: any; stats: any }[]; fmtVal: (v: number) => string; getValue: (st: any) => number };
+  teamKey: string;
+  onClose: () => void;
+  onPlayer: (id: number) => void;
+}) {
+  const [posFilter, setPosFilter] = useState('All');
+
+  const positions = ['All', ...Array.from(new Set(stat.players.map(p => p.player.Position).filter(Boolean)))];
+  const filtered = posFilter === 'All'
+    ? stat.players
+    : stat.players.filter(({ player }) => player.Position === posFilter);
+
+  return (
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#141414' }}>
+      {/* Header */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#2a2a2a' }}>
+        <Text style={{ color: '#fff', fontSize: 18, fontWeight: '700', flex: 1 }}>{stat.label}</Text>
+        <TouchableOpacity onPress={onClose} style={{ padding: 8 }}>
+          <Text style={{ color: '#6ee7b7', fontSize: 16, fontWeight: '600' }}>Done</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Position filter pills */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 12, paddingVertical: 10, gap: 8 }}>
+        {positions.map(pos => (
+          <TouchableOpacity
+            key={pos}
+            onPress={() => setPosFilter(pos)}
+            style={{ paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20, backgroundColor: posFilter === pos ? '#6ee7b7' : '#1e1e1e', borderWidth: 1, borderColor: posFilter === pos ? '#6ee7b7' : '#333' }}
+          >
+            <Text style={{ color: posFilter === pos ? '#000' : '#aaa', fontWeight: '600', fontSize: 13 }}>{pos}</Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+
+      {/* Player list */}
+      <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 40 }}>
+        {filtered.map(({ player, stats }, i) => (
+          <PlayerStatRowComp
+            key={player.PlayerID}
+            player={player}
+            stats={stats}
+            statValue={stat.fmtVal(stat.getValue(stats))}
+            teamKey={teamKey}
+            isFirst={i === 0}
+            onPress={() => onPlayer(player.PlayerID)}
+          />
+        ))}
+        {filtered.length === 0 && (
+          <Text style={{ color: '#555', fontSize: 14, textAlign: 'center', marginTop: 40 }}>No players at this position</Text>
+        )}
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
@@ -1266,27 +1325,7 @@ function StatsTab({ teamKey }: { teamKey: string }) {
           <>
             {/* Full-page modal for View All */}
             <Modal visible={!!viewAllStat} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setViewAllStat(null)}>
-              <SafeAreaView style={{ flex: 1, backgroundColor: '#141414' }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#2a2a2a' }}>
-                  <Text style={{ color: '#fff', fontSize: 18, fontWeight: '700', flex: 1 }}>{viewAllStat?.label}</Text>
-                  <TouchableOpacity onPress={() => setViewAllStat(null)} style={{ padding: 8 }}>
-                    <Text style={{ color: '#6ee7b7', fontSize: 16, fontWeight: '600' }}>Done</Text>
-                  </TouchableOpacity>
-                </View>
-                <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 40 }}>
-                  {viewAllStat?.players.map(({ player, stats }, i) => (
-                    <PlayerStatRowComp
-                      key={player.PlayerID}
-                      player={player}
-                      stats={stats}
-                      statValue={viewAllStat.fmtVal(viewAllStat.getValue(stats))}
-                      teamKey={teamKey}
-                      isFirst={i === 0}
-                      onPress={() => { setViewAllStat(null); navigation.navigate('PlayerProfile', { playerId: player.PlayerID }); }}
-                    />
-                  ))}
-                </ScrollView>
-              </SafeAreaView>
+              {viewAllStat && <ViewAllModal stat={viewAllStat} teamKey={teamKey} onClose={() => setViewAllStat(null)} onPlayer={(id) => { setViewAllStat(null); navigation.navigate('PlayerProfile', { playerId: id }); }} />}
             </Modal>
             {STAT_CATEGORIES.map(stat => renderStatCard(stat))}
           </>
