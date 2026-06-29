@@ -892,6 +892,21 @@ export async function getBoxScore(gameId, gameDate = null, awayHint = null, home
 
   const nbaId = fmtGameId(gameId);
   const ttl = 86400 * 30; // final scores never change
+  const cacheKey = `boxscore_v2_${nbaId}`;
+
+  // Check cache first (both fresh and stale)
+  const cached = readDisk(cacheKey);
+  if (cached !== undefined) return cached;
+
+  const stale = readDisk(cacheKey, { allowStale: true });
+  if (stale !== undefined) {
+    // Return stale cache immediately, fetch fresh in background
+    setImmediate(async () => {
+      const params = { GameID: nbaId, StartPeriod: 1, EndPeriod: 10, StartRange: 0, EndRange: 0, RangeType: 0 };
+      try { await nbFetch('/stats/boxscoretraditionalv2', params, ttl, cacheKey); } catch {}
+    });
+    return stale;
+  }
 
   const params = {
     GameID: nbaId,
@@ -899,7 +914,7 @@ export async function getBoxScore(gameId, gameDate = null, awayHint = null, home
     StartRange: 0, EndRange: 0, RangeType: 0,
   };
 
-  const data = await nbFetch('/stats/boxscoretraditionalv2', params, ttl, `boxscore_v2_${nbaId}`);
+  const data = await nbFetch('/stats/boxscoretraditionalv2', params, ttl, cacheKey);
 
   const players  = parseRS(data.resultSets, 'PlayerStats');
   const teamRows = parseRS(data.resultSets, 'TeamStats');
