@@ -62,12 +62,16 @@ app.listen(PORT, async () => {
 
       if (needsBio)    await getPlayerById(id).catch(() => {});
       if (needsCareer) await getPlayerCareerStats(id).catch(() => {});
-      // Skip logs/stats if most already cached — they'll be computed on-demand faster
-      if (rSkipped > uniqueIds.length * 0.9) { rWarmed++; await new Promise(r => setTimeout(r, 100)); continue; }
+      // Skip expensive warming if cache is >95% complete — already warmed
+      const cacheRatio = rSkipped / uniqueIds.length;
+      if (cacheRatio > 0.95) {
+        console.log(`Roster cache ${(cacheRatio * 100).toFixed(0)}% complete — skipping expensive pre-warm`);
+        break;
+      }
       if (needsLogs)   await getPlayerGameLogs(season, id).catch(() => {});
       if (needsStats)  await getPlayerSeasonStats(season, id).catch(() => {});
       rWarmed++;
-      await new Promise(r => setTimeout(r, 200)); // Reduced from 400ms
+      await new Promise(r => setTimeout(r, 200));
     }
     console.log(`Roster pre-warm: ${rWarmed} players fully cached, ${rSkipped} already complete`);
   });
@@ -128,6 +132,13 @@ app.listen(PORT, async () => {
     console.log(`Total players: ${allIds.length}`);
     console.log(`Already cached: ${alreadyCached}`);
     console.log(`To cache: ${uncachedIds.length}`);
+
+    // If >95% cached, skip expensive player profile caching — cache already warm
+    if (alreadyCached / allIds.length > 0.95) {
+      console.log(`✓ Cache ${(alreadyCached / allIds.length * 100).toFixed(0)}% complete — skipping player profile pre-warm\n`);
+      return;
+    }
+
     if (uncachedIds.length > 0) {
       const estMins = Math.ceil(uncachedIds.length * 1.2 / 60);
       console.log(`Estimated time: ~${estMins} minutes\n`);
