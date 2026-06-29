@@ -96,6 +96,22 @@ async function nbFetch(path, params = {}, ttl = 300, cacheKey = null) {
   const disk = readDisk(key);
   if (disk !== undefined) { memCache.set(key, disk, ttl); return disk; }
 
+  // If fresh cache miss but stale cache exists, return stale immediately + update async
+  const stale = readDisk(key, { allowStale: true });
+  if (stale !== undefined) {
+    memCache.set(key, stale, 60);
+    // Fetch fresh data in background without waiting
+    setImmediate(async () => {
+      const client = SLOW_PATHS.some(p => path.startsWith(p)) ? nbaSlowClient : nbaClient;
+      try {
+        const { data } = await client.get(path, { params });
+        memCache.set(key, data, ttl);
+        writeDisk(key, data, ttl);
+      } catch {}
+    });
+    return stale;
+  }
+
   const client = SLOW_PATHS.some(p => path.startsWith(p)) ? nbaSlowClient : nbaClient;
   try {
     const { data } = await client.get(path, { params });
@@ -103,8 +119,6 @@ async function nbFetch(path, params = {}, ttl = 300, cacheKey = null) {
     writeDisk(key, data, ttl);
     return data;
   } catch (err) {
-    const stale = readDisk(key, { allowStale: true });
-    if (stale !== undefined) { memCache.set(key, stale, 60); return stale; }
     throw err;
   }
 }
