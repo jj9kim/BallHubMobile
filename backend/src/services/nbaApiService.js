@@ -718,14 +718,20 @@ export async function getTeamSchedule(season, teamAbbr) {
   const seasonStr = toSeasonStr(season);
   const appAbbr = toAppAbbr(teamAbbr);
 
+  // Check full schedule cache first (includes both reg season + playoffs)
+  const fullCacheKey = `schedule_full_${teamAbbr}_${season}`;
+  const cached = readDisk(fullCacheKey);
+  if (cached !== undefined) return cached;
+
   // Regular season: always try NBA API first (it includes final scores via PTS/PLUS_MINUS)
   let reg = [];
   const regCacheKey = `schedule_reg_${teamAbbr}_${season}`;
   try {
+    const ttl = adjustTtlForOffseason(86400); // 24h during season, forever during offseason
     const regData = await nbFetch('/stats/leaguegamefinder', {
       PlayerOrTeam: 'T', TeamID: teamId,
       Season: seasonStr, SeasonType: 'Regular Season', LeagueID: '00',
-    }, 86400, `schedule_reg_${teamAbbr}_${season}`);
+    }, ttl, `schedule_reg_${teamAbbr}_${season}`);
 
     const mapRow = (row) => {
       const isHome   = row.MATCHUP?.includes('vs.');
@@ -766,7 +772,13 @@ export async function getTeamSchedule(season, teamAbbr) {
   const playoffGameIds = new Set(playoffs.map(g => g.GameID));
   const regFiltered = reg.filter(g => !playoffGameIds.has(g.GameID));
 
-  return [...regFiltered, ...playoffs].sort((a, b) => (a.Day ?? '').localeCompare(b.Day ?? ''));
+  const result = [...regFiltered, ...playoffs].sort((a, b) => (a.Day ?? '').localeCompare(b.Day ?? ''));
+
+  // Cache full schedule so it doesn't re-fetch individual dates next time
+  const fullTtl = adjustTtlForOffseason(86400);
+  writeDisk(fullCacheKey, result, fullTtl);
+
+  return result;
 }
 
 // Build an array of YYYY-MM-DD strings for every day in [startDate, endDate]
@@ -794,6 +806,23 @@ export async function getSchedule(season) {
     : `${season + 1}-06-22`;
 
   const allDates = dateRange(startDate, endDate);
+
+  // During offseason, don't re-fetch ESPN — just return what's cached
+  if (isOffseason()) {
+    const seen = new Set();
+    const games = [];
+    for (const date of allDates) {
+      const cached = readDisk(`espn_scoreboard_${date}`);
+      if (!cached) continue;
+      for (const g of cached) {
+        if (g.SeasonType !== 3) continue;
+        if (seen.has(g.GameID)) continue;
+        seen.add(g.GameID);
+        games.push(g);
+      }
+    }
+    return games.sort((a, b) => (a.Day ?? '').localeCompare(b.Day ?? ''));
+  }
 
   // Fetch any dates not yet in ESPN cache, in parallel batches
   const missing = allDates.filter(date => readDisk(`espn_scoreboard_${date}`) === undefined);
