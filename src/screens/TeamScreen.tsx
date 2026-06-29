@@ -1055,7 +1055,7 @@ function StatsTab({ teamKey }: { teamKey: string }) {
   const [loading,      setLoading]      = useState(true);
   const [loadingRoster, setLoadingRoster] = useState(true);
   const [view,        setView]          = useState<'regular' | 'playoffs'>('regular');
-  const [sortKey,     setSortKey]       = useState<SortKey>('PTS');
+  const [expandedStat, setExpandedStat] = useState<SortKey | null>(null);
 
   useEffect(() => {
     NBAService.getTeamSeasonStats(teamKey)
@@ -1163,105 +1163,77 @@ function StatsTab({ teamKey }: { teamKey: string }) {
       )}
 
       {/* ── Player Stats ── */}
-      <View style={s.card}>
-        <Text style={s.sectionLabel}>Player Stats</Text>
-        {loadingRoster ? (
+      {loadingRoster ? (
+        <View style={s.card}>
+          <Text style={s.sectionLabel}>Player Stats</Text>
           <ActivityIndicator color="#fff" style={{ marginVertical: 16 }} />
-        ) : rosterStats.length === 0 ? (
+        </View>
+      ) : rosterStats.length === 0 ? (
+        <View style={s.card}>
+          <Text style={s.sectionLabel}>Player Stats</Text>
           <Text style={[s.emptyText, { marginTop: 12 }]}>No player data</Text>
-        ) : (() => {
-          const STAT_TABS: { key: SortKey | 'ALL'; label: string; getValue?: (st: any) => number }[] = [
-            { key: 'PTS', label: 'PTS', getValue: s => s?.Points ?? 0 },
-            { key: 'REB', label: 'REB', getValue: s => s?.Rebounds ?? 0 },
-            { key: 'AST', label: 'AST', getValue: s => s?.Assists ?? 0 },
-            { key: 'STL', label: 'STL', getValue: s => s?.Steals ?? 0 },
-            { key: 'BLK', label: 'BLK', getValue: s => s?.BlockedShots ?? 0 },
-            { key: 'ALL', label: 'All', getValue: undefined },
-          ];
+        </View>
+      ) : (() => {
+        const STAT_CATEGORIES: { key: SortKey; label: string; getValue: (st: any) => number }[] = [
+          { key: 'PTS', label: 'Points', getValue: s => s?.Points ?? 0 },
+          { key: 'REB', label: 'Rebounds', getValue: s => s?.Rebounds ?? 0 },
+          { key: 'AST', label: 'Assists', getValue: s => s?.Assists ?? 0 },
+          { key: 'STL', label: 'Steals', getValue: s => s?.Steals ?? 0 },
+          { key: 'BLK', label: 'Blocks', getValue: s => s?.BlockedShots ?? 0 },
+        ];
 
-          // Get sorted list
-          const getPlayers = () => {
-            if (sortKey === 'ALL') {
-              // Return all players sorted by points
-              return [...rosterStats].sort((a, b) => {
-                if (!a.stats && !b.stats) return 0;
-                if (!a.stats) return 1;
-                if (!b.stats) return -1;
-                return (b.stats?.Points ?? 0) - (a.stats?.Points ?? 0);
-              });
-            }
-            // Return top 5 for selected stat
-            const col = STAT_TABS.find(c => c.key === sortKey)!;
-            return [...rosterStats]
-              .sort((a, b) => {
-                if (!a.stats && !b.stats) return 0;
-                if (!a.stats) return 1;
-                if (!b.stats) return -1;
-                return col.getValue!(b.stats) - col.getValue!(a.stats);
-              })
-              .slice(0, 5);
-          };
+        const renderStatCard = (stat: typeof STAT_CATEGORIES[0]) => {
+          const sorted = [...rosterStats]
+            .filter(r => r.stats)
+            .sort((a, b) => stat.getValue(b.stats) - stat.getValue(a.stats));
+          const top5 = sorted.slice(0, 5);
+          const isExpanded = expandedStat === stat.key;
+          const displayPlayers = isExpanded ? sorted : top5;
 
-          const players = getPlayers();
-          const isAllView = sortKey === 'ALL';
+          const fmtVal = (v: number) =>
+            stat.key === 'FG' ? (v * 100).toFixed(1) + '%' : v.toFixed(1);
 
           return (
-            <>
-              {/* Stat category tabs */}
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 12, marginHorizontal: -14 }}>
-                <View style={{ flexDirection: 'row', paddingHorizontal: 14, gap: 8 }}>
-                  {STAT_TABS.map(tab => (
-                    <TouchableOpacity
-                      key={tab.key}
-                      onPress={() => setSortKey(tab.key as SortKey)}
-                      style={[
-                        s.statTab,
-                        sortKey === tab.key && s.statTabActive,
-                      ]}
-                    >
-                      <Text style={[s.statTabLabel, sortKey === tab.key && s.statTabLabelActive]}>
-                        {tab.label}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </ScrollView>
-
-              {/* Player rows */}
-              <View style={{ marginTop: 12 }}>
-                {players.map(({ player, stats }, i) => {
-                  const d = '—';
-                  const fmtVal = (v: number, isPercent = false) =>
-                    isPercent ? (v * 100).toFixed(1) + '%' : v.toFixed(1);
-                  return (
-                    <TouchableOpacity
-                      key={player.PlayerID}
-                      style={[s.psrRow, i > 0 && { borderTopWidth: 1, borderTopColor: '#1e1e1e' }, { paddingVertical: 9 }]}
-                      onPress={() => navigation.navigate('PlayerProfile', { playerId: player.PlayerID })}
-                      activeOpacity={0.7}
-                    >
-                      <View style={s.psrName}>
-                        <Text style={{ color: stats ? '#fff' : '#444', fontSize: 12, fontWeight: '600' }} numberOfLines={1}>
-                          {player.LastName}
-                        </Text>
-                        <Text style={{ color: '#555', fontSize: 10 }}>{player.Position}</Text>
-                      </View>
-                      <Text style={s.psrStat}>{stats ? fmtVal(stats.Points) : d}</Text>
-                      <Text style={s.psrStat}>{stats ? fmtVal(stats.Rebounds) : d}</Text>
-                      <Text style={s.psrStat}>{stats ? fmtVal(stats.Assists) : d}</Text>
-                      <Text style={s.psrStat}>{stats ? fmtVal(stats.Steals) : d}</Text>
-                      <Text style={s.psrStat}>{stats ? fmtVal(stats.BlockedShots) : d}</Text>
-                      <Text style={s.psrStat}>{stats ? fmtVal(stats.FieldGoalsPercentage, true) : d}</Text>
-                      <Text style={[s.psrStat, { color: '#666' }]}>{stats ? stats.Games : d}</Text>
-                    </TouchableOpacity>
-                  );
-                })}
+            <View key={stat.key} style={s.card}>
+              <Text style={s.sectionLabel}>{stat.label}</Text>
+              <View style={{ marginTop: 12, gap: 1 }}>
+                {displayPlayers.map(({ player, stats }, i) => (
+                  <TouchableOpacity
+                    key={player.PlayerID}
+                    style={[s.playerStatRow, i > 0 && { borderTopWidth: 1, borderTopColor: '#1e1e1e' }]}
+                    onPress={() => navigation.navigate('PlayerProfile', { playerId: player.PlayerID })}
+                    activeOpacity={0.7}
+                  >
+                    <View style={s.playerStatNameCol}>
+                      <Text style={s.playerStatName}>{player.LastName}</Text>
+                      <Text style={s.playerStatPos}>{player.Position}</Text>
+                    </View>
+                    <Text style={s.playerStatValue}>{fmtVal(stat.getValue(stats))}</Text>
+                  </TouchableOpacity>
+                ))}
               </View>
-              {!isAllView && <Text style={[s.emptyText, { marginTop: 12, textAlign: 'center', fontSize: 11 }]}>Showing top 5 by {sortKey}</Text>}
-            </>
+
+              {sorted.length > 5 && (
+                <TouchableOpacity
+                  style={s.viewAllBtn}
+                  onPress={() => setExpandedStat(isExpanded ? null : stat.key)}
+                >
+                  <Text style={s.viewAllBtnText}>
+                    {isExpanded ? 'Hide All' : `View All (${sorted.length})`}
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
           );
-        })()}
-      </View>
+        };
+
+        return (
+          <>
+            {STAT_CATEGORIES.map(stat => renderStatCard(stat))}
+          </>
+        );
+      })()}
+    </ScrollView>
     </ScrollView>
   );
 }
@@ -1373,11 +1345,14 @@ const s = StyleSheet.create({
   psrHeader:      { color: '#555', fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.4, textAlign: 'center' },
   psrStat:        { flex: 1, color: '#ccc', fontSize: 11, fontWeight: '600', textAlign: 'center' },
 
-  // ── stat category tabs ────────────────────────────────────────────────────────
-  statTab:        { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, backgroundColor: '#242424' },
-  statTabActive:  { backgroundColor: '#fff' },
-  statTabLabel:   { color: '#777', fontSize: 11, fontWeight: '600' },
-  statTabLabelActive: { color: '#000', fontWeight: '700' },
+  // ── player stat cards ──────────────────────────────────────────────────────────
+  playerStatRow:    { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 4 },
+  playerStatNameCol:{ flex: 1 },
+  playerStatName:   { color: '#fff', fontSize: 13, fontWeight: '600' },
+  playerStatPos:    { color: '#555', fontSize: 10, marginTop: 2 },
+  playerStatValue:  { color: '#6ee7b7', fontSize: 14, fontWeight: '700', minWidth: 50, textAlign: 'right' },
+  viewAllBtn:       { marginTop: 12, paddingVertical: 8, borderTopWidth: 1, borderTopColor: '#2a2a2a', alignItems: 'center' },
+  viewAllBtnText:   { color: '#888', fontSize: 11, fontWeight: '600' },
 
   // ── standings ────────────────────────────────────────────────────────────────
   standRow:           { flexDirection: 'row', alignItems: 'center' },
