@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, SafeAreaView, ScrollView,
-  TouchableOpacity, Image, ActivityIndicator, Dimensions,
+  TouchableOpacity, Image, ActivityIndicator, Dimensions, Modal,
 } from 'react-native';
 import Svg, { Line, Circle, Rect, Path } from 'react-native-svg';
 import { useNavigation } from '@react-navigation/native';
@@ -1099,7 +1099,7 @@ function StatsTab({ teamKey }: { teamKey: string }) {
   const [loading,      setLoading]      = useState(true);
   const [loadingRoster, setLoadingRoster] = useState(true);
   const [view,        setView]          = useState<'regular' | 'playoffs'>('regular');
-  const [expandedStat, setExpandedStat] = useState<SortKey | null>(null);
+  const [viewAllStat, setViewAllStat] = useState<{ key: SortKey; label: string; players: { player: any; stats: any }[]; fmtVal: (v: number) => string; getValue: (st: any) => number } | null>(null);
 
   useEffect(() => {
     NBAService.getTeamSeasonStats(teamKey)
@@ -1231,37 +1231,31 @@ function StatsTab({ teamKey }: { teamKey: string }) {
             .filter(r => r.stats)
             .sort((a, b) => stat.getValue(b.stats) - stat.getValue(a.stats));
           const top5 = sorted.slice(0, 5);
-          const isExpanded = expandedStat === stat.key;
-          const displayPlayers = isExpanded ? sorted : top5;
-
           const fmtVal = (v: number) =>
             stat.key === 'FG' ? (v * 100).toFixed(1) + '%' : v.toFixed(1);
 
           return (
             <View key={stat.key} style={s.card}>
               <Text style={s.sectionLabel}>{stat.label}</Text>
-              <View style={{ marginTop: 8 }}>
-                {displayPlayers.map(({ player, stats }, i) => (
-                  <TouchableOpacity
+              <View style={{ marginTop: 12, gap: 1 }}>
+                {top5.map(({ player, stats }, i) => (
+                  <PlayerStatRowComp
                     key={player.PlayerID}
+                    player={player}
+                    stats={stats}
+                    statValue={fmtVal(stat.getValue(stats))}
+                    teamKey={teamKey}
+                    isFirst={i === 0}
                     onPress={() => navigation.navigate('PlayerProfile', { playerId: player.PlayerID })}
-                    activeOpacity={0.7}
-                    style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 6, borderTopWidth: i === 0 ? 0 : 1, borderTopColor: '#2a2a2a' }}
-                  >
-                    <Text style={{ color: '#fff', fontSize: 12, fontWeight: '600', flex: 1 }} numberOfLines={1}>{player.LastName}</Text>
-                    <Text style={{ color: '#6ee7b7', fontSize: 13, fontWeight: '700', marginLeft: 4 }}>{fmtVal(stat.getValue(stats))}</Text>
-                  </TouchableOpacity>
+                  />
                 ))}
               </View>
-
               {sorted.length > 5 && (
                 <TouchableOpacity
                   style={s.viewAllBtn}
-                  onPress={() => setExpandedStat(isExpanded ? null : stat.key)}
+                  onPress={() => setViewAllStat({ key: stat.key, label: stat.label, players: sorted, fmtVal, getValue: stat.getValue })}
                 >
-                  <Text style={s.viewAllBtnText}>
-                    {isExpanded ? 'Hide All' : `View All (${sorted.length})`}
-                  </Text>
+                  <Text style={s.viewAllBtnText}>View All ({sorted.length})</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -1269,13 +1263,33 @@ function StatsTab({ teamKey }: { teamKey: string }) {
         };
 
         return (
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -4 }}>
-            {STAT_CATEGORIES.map(stat => (
-              <View key={stat.key} style={{ width: '50%', paddingHorizontal: 4, marginBottom: 8 }}>
-                {renderStatCard(stat)}
-              </View>
-            ))}
-          </View>
+          <>
+            {/* Full-page modal for View All */}
+            <Modal visible={!!viewAllStat} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setViewAllStat(null)}>
+              <SafeAreaView style={{ flex: 1, backgroundColor: '#141414' }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#2a2a2a' }}>
+                  <Text style={{ color: '#fff', fontSize: 18, fontWeight: '700', flex: 1 }}>{viewAllStat?.label}</Text>
+                  <TouchableOpacity onPress={() => setViewAllStat(null)} style={{ padding: 8 }}>
+                    <Text style={{ color: '#6ee7b7', fontSize: 16, fontWeight: '600' }}>Done</Text>
+                  </TouchableOpacity>
+                </View>
+                <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 40 }}>
+                  {viewAllStat?.players.map(({ player, stats }, i) => (
+                    <PlayerStatRowComp
+                      key={player.PlayerID}
+                      player={player}
+                      stats={stats}
+                      statValue={viewAllStat.fmtVal(viewAllStat.getValue(stats))}
+                      teamKey={teamKey}
+                      isFirst={i === 0}
+                      onPress={() => { setViewAllStat(null); navigation.navigate('PlayerProfile', { playerId: player.PlayerID }); }}
+                    />
+                  ))}
+                </ScrollView>
+              </SafeAreaView>
+            </Modal>
+            {STAT_CATEGORIES.map(stat => renderStatCard(stat))}
+          </>
         );
       })()}
     </ScrollView>
