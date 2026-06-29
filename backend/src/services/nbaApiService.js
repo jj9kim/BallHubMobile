@@ -1001,7 +1001,7 @@ export async function getStandings(season = currentSeason()) {
   const seasonStr = toSeasonStr(season);
   const data = await nbFetch('/stats/leaguestandingsv3', {
     LeagueID: '00', Season: seasonStr, SeasonType: 'Regular Season',
-  }, 900, `standings_${season}`);
+  }, 86400, `standings_${season}`); // Changed from 900s (15min) to 86400s (24hr)
 
   const rows = parseRS(data.resultSets, 'Standings');
 
@@ -1635,7 +1635,7 @@ export async function getPlayerCareerStats(playerId) {
 const TTL_FOREVER  = 86400 * 365 * 10; // 10 years — effectively permanent
 const TTL_BIO      = 86400 * 30;       // 30 days for active player bio
 const TTL_CAREER   = 86400 * 7;        // 7 days for active career stats
-const TTL_SEASON   = 86400;            // 1 day for active season stats / game logs
+const TTL_SEASON   = 86400 * 7;        // 7 days for active season stats / game logs (was 1 day, too frequent)
 
 // A season (e.g. 2025 = 2024-25) is complete once we're past its end year.
 // season 2025 ends June 2025 → complete any time in 2026+
