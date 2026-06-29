@@ -1234,7 +1234,6 @@ function StatsTab({ teamKey }: { teamKey: string }) {
         );
       })()}
     </ScrollView>
-    </ScrollView>
   );
 }
 
