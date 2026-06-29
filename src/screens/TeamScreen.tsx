@@ -1274,9 +1274,9 @@ function StatsTab({ teamKey }: { teamKey: string }) {
         };
 
         return (
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -6, gap: 12 }}>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -4 }}>
             {STAT_CATEGORIES.map(stat => (
-              <View key={stat.key} style={{ width: '50%', paddingHorizontal: 6 }}>
+              <View key={stat.key} style={{ width: '50%', paddingHorizontal: 4, marginBottom: 8 }}>
                 {renderStatCard(stat)}
               </View>
             ))}
