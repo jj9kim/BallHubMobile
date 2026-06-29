@@ -1197,20 +1197,46 @@ function StatsTab({ teamKey }: { teamKey: string }) {
             <View key={stat.key} style={s.card}>
               <Text style={s.sectionLabel}>{stat.label}</Text>
               <View style={{ marginTop: 12, gap: 1 }}>
-                {displayPlayers.map(({ player, stats }, i) => (
-                  <TouchableOpacity
-                    key={player.PlayerID}
-                    style={[s.playerStatRow, i > 0 && { borderTopWidth: 1, borderTopColor: '#1e1e1e' }]}
-                    onPress={() => navigation.navigate('PlayerProfile', { playerId: player.PlayerID })}
-                    activeOpacity={0.7}
-                  >
-                    <View style={s.playerStatNameCol}>
-                      <Text style={s.playerStatName}>{player.LastName}</Text>
-                      <Text style={s.playerStatPos}>{player.Position}</Text>
-                    </View>
-                    <Text style={s.playerStatValue}>{fmtVal(stat.getValue(stats))}</Text>
-                  </TouchableOpacity>
-                ))}
+                {displayPlayers.map(({ player, stats }, i) => {
+                  const [imgFailed, setImgFailed] = React.useState(false);
+                  const photoUri = player.PhotoUrl ?? null;
+
+                  return (
+                    <TouchableOpacity
+                      key={player.PlayerID}
+                      style={[s.playerStatRow, i > 0 && { borderTopWidth: 1, borderTopColor: '#1e1e1e' }]}
+                      onPress={() => navigation.navigate('PlayerProfile', { playerId: player.PlayerID })}
+                      activeOpacity={0.7}
+                    >
+                      {/* Player image */}
+                      <View style={s.playerStatImg}>
+                        {!imgFailed && photoUri ? (
+                          <Image
+                            source={{ uri: photoUri }}
+                            style={{ width: '100%', height: '100%' }}
+                            resizeMode="cover"
+                            onError={() => setImgFailed(true)}
+                          />
+                        ) : (
+                          <View style={{ width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center', backgroundColor: teamColors[teamKey] ?? '#333' }}>
+                            <Text style={{ color: '#fff', fontSize: 10, fontWeight: '800' }}>
+                              {player.LastName?.slice(0, 2).toUpperCase() ?? ''}
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+
+                      {/* Name and position */}
+                      <View style={s.playerStatNameCol}>
+                        <Text style={s.playerStatName}>{player.LastName}</Text>
+                        <Text style={s.playerStatPos}>{player.Position}</Text>
+                      </View>
+
+                      {/* Stat value */}
+                      <Text style={s.playerStatValue}>{fmtVal(stat.getValue(stats))}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
 
               {sorted.length > 5 && (
@@ -1345,7 +1371,8 @@ const s = StyleSheet.create({
   psrStat:        { flex: 1, color: '#ccc', fontSize: 11, fontWeight: '600', textAlign: 'center' },
 
   // ── player stat cards ──────────────────────────────────────────────────────────
-  playerStatRow:    { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 4 },
+  playerStatRow:    { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 4, gap: 10 },
+  playerStatImg:    { width: 40, height: 40, borderRadius: 20, overflow: 'hidden', backgroundColor: '#2a2a2a', flexShrink: 0 },
   playerStatNameCol:{ flex: 1 },
   playerStatName:   { color: '#fff', fontSize: 13, fontWeight: '600' },
   playerStatPos:    { color: '#555', fontSize: 10, marginTop: 2 },
