@@ -914,7 +914,24 @@ export async function getBoxScore(gameId, gameDate = null, awayHint = null, home
     StartRange: 0, EndRange: 0, RangeType: 0,
   };
 
-  const data = await nbFetch('/stats/boxscoretraditionalv2', params, ttl, cacheKey);
+  // Use timeout: if boxscore fetch takes >3s, return empty rather than wait 12s
+  // This prevents team overview from being blocked. Boxscore will be cached for next visit.
+  let data;
+  try {
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('Boxscore fetch timeout')), 3000)
+    );
+    data = await Promise.race([
+      nbFetch('/stats/boxscoretraditionalv2', params, ttl, cacheKey),
+      timeoutPromise
+    ]);
+  } catch (err) {
+    if (err.message === 'Boxscore fetch timeout') {
+      // Timeout: return empty boxscore so team page doesn't block
+      return { Game: {}, PlayerGames: [], TeamGames: [] };
+    }
+    throw err;
+  }
 
   const players  = parseRS(data.resultSets, 'PlayerStats');
   const teamRows = parseRS(data.resultSets, 'TeamStats');
