@@ -1238,32 +1238,37 @@ function StatsTab({ teamKey }: { teamKey: string }) {
             stat.key === 'FG' ? (v * 100).toFixed(1) + '%' : v.toFixed(1);
 
           return (
-            <View key={stat.key} style={s.card}>
-              <Text style={s.sectionLabel}>{stat.label}</Text>
-              <View style={{ marginTop: 12, gap: 1 }}>
-                {displayPlayers.map(({ player, stats }, i) => (
+            <View key={stat.key} style={[s.card, { flexDirection: 'row', paddingRight: 0 }]}>
+              {/* Left column: stat label */}
+              <View style={{ width: 70, justifyContent: 'flex-start', paddingRight: 12 }}>
+                <Text style={s.sectionLabel}>{stat.label}</Text>
+              </View>
+
+              {/* Right column: player list */}
+              <View style={{ flex: 1, gap: 1 }}>
+                {displayPlayers.map(({ player, stats }) => (
                   <PlayerStatRowComp
                     key={player.PlayerID}
                     player={player}
                     stats={stats}
                     statValue={fmtVal(stat.getValue(stats))}
                     teamKey={teamKey}
-                    isFirst={i === 0}
+                    isFirst={false}
                     onPress={() => navigation.navigate('PlayerProfile', { playerId: player.PlayerID })}
                   />
                 ))}
-              </View>
 
-              {sorted.length > 5 && (
-                <TouchableOpacity
-                  style={s.viewAllBtn}
-                  onPress={() => setExpandedStat(isExpanded ? null : stat.key)}
-                >
-                  <Text style={s.viewAllBtnText}>
-                    {isExpanded ? 'Hide All' : `View All (${sorted.length})`}
-                  </Text>
-                </TouchableOpacity>
-              )}
+                {sorted.length > 5 && (
+                  <TouchableOpacity
+                    style={s.viewAllBtn}
+                    onPress={() => setExpandedStat(isExpanded ? null : stat.key)}
+                  >
+                    <Text style={s.viewAllBtnText}>
+                      {isExpanded ? 'Hide All' : `View All (${sorted.length})`}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </View>
             </View>
           );
         };
