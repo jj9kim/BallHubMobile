@@ -1092,9 +1092,9 @@ function RankBadge({ rank }: { rank?: number }) {
 function positionGroup(pos: string): string {
   if (!pos) return 'Other';
   const p = pos.toUpperCase();
-  if (p.includes('G')) return 'Guard';
-  if (p.includes('F')) return 'Forward';
-  if (p.includes('C')) return 'Center';
+  if (p.includes('C')) return 'Center';  // C, C-F, F-C all → Center
+  if (p.includes('G')) return 'Guard';   // G, G-F → Guard
+  if (p.includes('F')) return 'Forward'; // F → Forward
   return 'Other';
 }
 
