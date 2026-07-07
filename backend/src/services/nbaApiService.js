@@ -1537,6 +1537,26 @@ export async function getAllLeagueTeamStats(season = null, seasonType = 2) {
     .filter(r => r.status === 'fulfilled' && r.value.stats && r.value.stats.GP > 0)
     .map(r => r.value);
 
+  // Add OPP_PTS from cached leaguegamefinder data
+  const nbaSeasonType = seasonType === 3 ? 'Playoffs' : 'Regular Season';
+  await Promise.allSettled(teams.map(async t => {
+    try {
+      const oppCacheKey = `opp_pts_${t.abbr}_${seasonParam}_${nbaSeasonType}`;
+      const oppCached = readDisk(oppCacheKey, { allowStale: isPast });
+      if (oppCached !== undefined) { t.stats.OPP_PTS = oppCached; return; }
+      const data = await nbFetch('/stats/leaguegamefinder', {
+        PlayerOrTeam: 'T', TeamID: TEAM_IDS[t.abbr],
+        Season: toSeasonStr(seasonParam), SeasonType: nbaSeasonType, LeagueID: '00',
+      }, isPast ? TTL_FOREVER : TTL_SEASON, `gamefinder_${t.abbr}_${seasonParam}_${nbaSeasonType}`);
+      const rows = parseRS(data.resultSets, 'LeagueGameFinderResults');
+      if (rows.length) {
+        const avg = rows.reduce((sum, r) => sum + ((r.PTS ?? 0) - (r.PLUS_MINUS ?? 0)), 0) / rows.length;
+        t.stats.OPP_PTS = avg;
+        writeDisk(oppCacheKey, avg, isPast ? TTL_FOREVER : TTL_SEASON);
+      }
+    } catch {}
+  }));
+
   writeDisk(cacheKey, teams, isPast ? TTL_FOREVER : TTL_SEASON);
   return teams;
 }

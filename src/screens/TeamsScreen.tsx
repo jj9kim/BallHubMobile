@@ -278,17 +278,18 @@ function DraftTab() {
 // ── League Stats Tab ──────────────────────────────────────────────────────────
 
 const STAT_COLS_DEF = [
-  { key: 'PTS',   label: 'PTS' },
-  { key: 'REB',   label: 'REB' },
-  { key: 'AST',   label: 'AST' },
-  { key: 'TOV',   label: 'TOV' },
-  { key: 'STL',   label: 'STL' },
-  { key: 'BLK',   label: 'BLK' },
-  { key: 'FGPct', label: 'FG%' },
-  { key: 'TPPct', label: '3P%' },
-  { key: 'FTPct', label: 'FT%' },
+  { key: 'PTS',     label: 'PTS' },
+  { key: 'OPP_PTS', label: 'OPP' },
+  { key: 'REB',     label: 'REB' },
+  { key: 'AST',     label: 'AST' },
+  { key: 'TOV',     label: 'TOV' },
+  { key: 'STL',     label: 'STL' },
+  { key: 'BLK',     label: 'BLK' },
+  { key: 'FGPct',   label: 'FG%' },
+  { key: 'TPPct',   label: '3P%' },
+  { key: 'FTPct',   label: 'FT%' },
 ];
-const LOWER_IS_BETTER = new Set(['TOV']);
+const LOWER_IS_BETTER = new Set(['TOV', 'OPP_PTS']);
 const SEASONS_LIST = [2025,2024,2023,2022,2021,2020,2019,2018,2017,2016];
 
 function LeagueStatsTab() {
