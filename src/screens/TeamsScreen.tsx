@@ -277,29 +277,28 @@ function DraftTab() {
 
 // ── League Stats Tab ──────────────────────────────────────────────────────────
 
-const STAT_COLS_DEF = [
-  { key: 'PTS',     label: 'PTS' },
-  { key: 'OPP_PTS', label: 'OPP' },
-  { key: 'REB',     label: 'REB' },
-  { key: 'AST',     label: 'AST' },
-  { key: 'TOV',     label: 'TOV' },
-  { key: 'STL',     label: 'STL' },
-  { key: 'BLK',     label: 'BLK' },
-  { key: 'FGPct',   label: 'FG%' },
-  { key: 'TPPct',   label: '3P%' },
-  { key: 'FTPct',   label: 'FT%' },
+const LEAGUE_STAT_CATEGORIES = [
+  { key: 'PTS',     label: 'Points',         lowerBetter: false },
+  { key: 'OPP_PTS', label: 'Points Allowed', lowerBetter: true  },
+  { key: 'REB',     label: 'Rebounds',       lowerBetter: false },
+  { key: 'AST',     label: 'Assists',        lowerBetter: false },
+  { key: 'TOV',     label: 'Turnovers',      lowerBetter: true  },
+  { key: 'STL',     label: 'Steals',         lowerBetter: false },
+  { key: 'BLK',     label: 'Blocks',         lowerBetter: false },
+  { key: 'FGPct',   label: 'FG%',            lowerBetter: false },
+  { key: 'TPPct',   label: '3P%',            lowerBetter: false },
+  { key: 'FTPct',   label: 'FT%',            lowerBetter: false },
 ];
-const LOWER_IS_BETTER = new Set(['TOV', 'OPP_PTS']);
 const SEASONS_LIST = [2025,2024,2023,2022,2021,2020,2019,2018,2017,2016];
 
 function LeagueStatsTab() {
   const navigation = useNavigation<Nav>();
   const [teams, setTeams]           = useState<{ abbr: string; stats: any }[]>([]);
   const [loading, setLoading]       = useState(true);
-  const [sortKey, setSortKey]       = useState('PTS');
   const [seasonType, setSeasonType] = useState(2);
   const [season, setSeason]         = useState(2025);
   const [showPicker, setShowPicker] = useState(false);
+  const [viewAll, setViewAll]       = useState<{ label: string; teams: { abbr: string; val: string }[] } | null>(null);
 
   useEffect(() => {
     setLoading(true);
@@ -310,32 +309,28 @@ function LeagueStatsTab() {
       .finally(() => setLoading(false));
   }, [season, seasonType]);
 
-  const fmt = (v: number, key: string) =>
-    key.includes('Pct') ? (v * 100).toFixed(1) + '%' : v?.toFixed(1) ?? '—';
+  const fmt = (v: number, key: string) => {
+    if (v == null) return '—';
+    return key.includes('Pct') ? (v * 100).toFixed(1) + '%' : v.toFixed(1);
+  };
 
-  const sorted = [...teams].sort((a, b) =>
-    LOWER_IS_BETTER.has(sortKey)
-      ? (a.stats?.[sortKey] ?? 0) - (b.stats?.[sortKey] ?? 0)
-      : (b.stats?.[sortKey] ?? 0) - (a.stats?.[sortKey] ?? 0)
-  );
+  const navigateTeam = (abbr: string) => navigation.navigate('TeamProfile', {
+    teamKey: abbr,
+    teamCity: teamFullNames[abbr]?.split(' ').slice(0, -1).join(' ') ?? abbr,
+    teamName: teamFullNames[abbr]?.split(' ').slice(-1)[0] ?? abbr,
+  });
 
   return (
     <View style={{ flex: 1 }}>
-      {/* Controls row */}
+      {/* Controls */}
       <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 10, gap: 8 }}>
-        {/* Season picker button */}
-        <TouchableOpacity
-          onPress={() => setShowPicker(true)}
-          style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#1e1e1e', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderColor: '#2a2a2a' }}
-        >
+        <TouchableOpacity onPress={() => setShowPicker(true)}
+          style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#1e1e1e', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderColor: '#2a2a2a' }}>
           <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>{season}-{String(season+1).slice(2)}</Text>
           <Text style={{ color: '#6ee7b7', fontSize: 11 }}>▼</Text>
         </TouchableOpacity>
-        {/* Regular / Playoffs toggle */}
-        <TouchableOpacity
-          onPress={() => setSeasonType(t => t === 2 ? 3 : 2)}
-          style={{ backgroundColor: '#1e1e1e', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderColor: seasonType === 3 ? '#6ee7b7' : '#2a2a2a' }}
-        >
+        <TouchableOpacity onPress={() => setSeasonType(t => t === 2 ? 3 : 2)}
+          style={{ backgroundColor: '#1e1e1e', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderColor: seasonType === 3 ? '#6ee7b7' : '#2a2a2a' }}>
           <Text style={{ color: seasonType === 3 ? '#6ee7b7' : '#aaa', fontWeight: '600', fontSize: 13 }}>
             {seasonType === 2 ? 'Regular Season' : 'Playoffs'}
           </Text>
@@ -353,11 +348,8 @@ function LeagueStatsTab() {
           </View>
           <ScrollView>
             {SEASONS_LIST.map(yr => (
-              <TouchableOpacity
-                key={yr}
-                onPress={() => { setSeason(yr); setShowPicker(false); }}
-                style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: '#1e1e1e' }}
-              >
+              <TouchableOpacity key={yr} onPress={() => { setSeason(yr); setShowPicker(false); }}
+                style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: '#1e1e1e' }}>
                 <Text style={{ color: season === yr ? '#6ee7b7' : '#fff', fontSize: 16, fontWeight: season === yr ? '700' : '400' }}>
                   {yr}-{String(yr+1).slice(2)}
                 </Text>
@@ -368,42 +360,64 @@ function LeagueStatsTab() {
         </SafeAreaView>
       </Modal>
 
-      {/* Stat column selector */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 12, gap: 6, paddingBottom: 8 }}>
-        {STAT_COLS_DEF.map(col => (
-          <TouchableOpacity
-            key={col.key}
-            onPress={() => setSortKey(col.key)}
-            style={{ paddingHorizontal: 14, paddingVertical: 6, borderRadius: 16, backgroundColor: sortKey === col.key ? '#6ee7b7' : '#1e1e1e', borderWidth: 1, borderColor: sortKey === col.key ? '#6ee7b7' : '#333' }}
-          >
-            <Text style={{ color: sortKey === col.key ? '#000' : '#aaa', fontWeight: '600', fontSize: 13 }}>{col.label}</Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
+      {/* View All modal */}
+      <Modal visible={!!viewAll} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setViewAll(null)}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: '#141414' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#2a2a2a' }}>
+            <Text style={{ color: '#fff', fontSize: 18, fontWeight: '700', flex: 1 }}>{viewAll?.label}</Text>
+            <TouchableOpacity onPress={() => setViewAll(null)} style={{ padding: 8 }}>
+              <Text style={{ color: '#6ee7b7', fontSize: 16, fontWeight: '600' }}>Done</Text>
+            </TouchableOpacity>
+          </View>
+          <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
+            {viewAll?.teams.map(({ abbr, val }, i) => (
+              <TouchableOpacity key={abbr} onPress={() => { setViewAll(null); navigateTeam(abbr); }}
+                style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#1e1e1e', gap: 12 }}>
+                <Text style={{ color: '#444', fontSize: 12, fontWeight: '700', width: 24, textAlign: 'right' }}>{i+1}</Text>
+                <TeamLogo abbrev={abbr} size={28} />
+                <Text style={{ color: '#fff', fontSize: 14, fontWeight: '600', flex: 1 }}>{teamFullNames[abbr] ?? abbr}</Text>
+                <Text style={{ color: '#fff', fontSize: 15, fontWeight: '700' }}>{val}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
 
-      {/* Table */}
+      {/* Stat cards */}
       {loading ? (
         <ActivityIndicator color="#fff" style={{ marginTop: 40 }} />
       ) : (
-        <ScrollView contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: 40 }}>
-          {sorted.map((t, i) => {
-            const val = t.stats?.[sortKey];
+        <ScrollView contentContainerStyle={{ padding: 12, gap: 10 }}>
+          {LEAGUE_STAT_CATEGORIES.map(cat => {
+            const sorted = [...teams]
+              .filter(t => t.stats?.[cat.key] != null)
+              .sort((a, b) => cat.lowerBetter
+                ? a.stats[cat.key] - b.stats[cat.key]
+                : b.stats[cat.key] - a.stats[cat.key]);
+            const top5 = sorted.slice(0, 5);
+            const allTeams = sorted.map(t => ({ abbr: t.abbr, val: fmt(t.stats[cat.key], cat.key) }));
+
             return (
-              <TouchableOpacity
-                key={t.abbr}
-                onPress={() => navigation.navigate('TeamProfile', {
-                  teamKey: t.abbr,
-                  teamCity: teamFullNames[t.abbr]?.split(' ').slice(0, -1).join(' ') ?? t.abbr,
-                  teamName: teamFullNames[t.abbr]?.split(' ').slice(-1)[0] ?? t.abbr,
-                })}
-                style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#1e1e1e', gap: 12 }}
-                activeOpacity={0.7}
-              >
-                <Text style={{ color: '#444', fontSize: 12, fontWeight: '700', width: 22, textAlign: 'right' }}>{i + 1}</Text>
-                <TeamLogo abbrev={t.abbr} size={28} />
-                <Text style={{ color: '#fff', fontSize: 14, fontWeight: '600', flex: 1 }}>{teamFullNames[t.abbr] ?? t.abbr}</Text>
-                <Text style={{ color: '#6ee7b7', fontSize: 16, fontWeight: '700', minWidth: 52, textAlign: 'right' }}>{fmt(val, sortKey)}</Text>
-              </TouchableOpacity>
+              <View key={cat.key} style={{ backgroundColor: '#1e1e1e', borderRadius: 14, paddingHorizontal: 14, paddingTop: 14, paddingBottom: 4 }}>
+                <Text style={{ color: '#aaa', fontSize: 11, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 }}>{cat.label}</Text>
+                <View style={{ marginTop: 10 }}>
+                  {top5.map(({ abbr, stats }, i) => (
+                    <TouchableOpacity key={abbr} onPress={() => navigateTeam(abbr)} activeOpacity={0.7}
+                      style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 9, borderTopWidth: i === 0 ? 0 : 1, borderTopColor: '#2a2a2a', gap: 10 }}>
+                      <Text style={{ color: '#444', fontSize: 11, fontWeight: '700', width: 16, textAlign: 'right' }}>{i+1}</Text>
+                      <TeamLogo abbrev={abbr} size={24} />
+                      <Text style={{ color: '#fff', fontSize: 13, fontWeight: '600', flex: 1 }} numberOfLines={1}>{teamFullNames[abbr] ?? abbr}</Text>
+                      <Text style={{ color: '#fff', fontSize: 14, fontWeight: '700' }}>{fmt(stats[cat.key], cat.key)}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                {sorted.length > 5 && (
+                  <TouchableOpacity onPress={() => setViewAll({ label: cat.label, teams: allTeams })}
+                    style={{ paddingVertical: 10, borderTopWidth: 1, borderTopColor: '#2a2a2a', alignItems: 'center' }}>
+                    <Text style={{ color: '#6ee7b7', fontSize: 13, fontWeight: '600' }}>View All ({sorted.length})</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
             );
           })}
         </ScrollView>
