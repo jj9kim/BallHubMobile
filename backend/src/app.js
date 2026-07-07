@@ -136,8 +136,7 @@ app.listen(PORT, async () => {
     // If >95% cached, skip expensive player profile caching — cache already warm
     if (alreadyCached / allIds.length > 0.95) {
       console.log(`✓ Cache ${(alreadyCached / allIds.length * 100).toFixed(0)}% complete — skipping player profile pre-warm\n`);
-      return;
-    }
+    } else {
 
     if (uncachedIds.length > 0) {
       const estMins = Math.ceil(uncachedIds.length * 1.2 / 60);
@@ -175,6 +174,7 @@ app.listen(PORT, async () => {
 
     console.log(`\n=== Player Profile Cache Complete ===`);
     console.log(`Cached: ${done} | Failed: ${failed} | Total: ${allIds.length}`);
+    } // end else (player profile pre-warm)
 
     // ── Step 4: Full game log + season stats cache for ALL active players ──────
     // Skips retired players (last career season < currentSeason) and players
