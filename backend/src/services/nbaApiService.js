@@ -855,11 +855,14 @@ export async function getSchedule(season) {
   }
 
   // Scan all ESPN scoreboard cache files for this season's playoff/playin games
+  // Use allowStale:true — playoff data never changes, expired cache is still valid
   const seen = new Set();
   const games = [];
+  const today = new Date().toISOString().split('T')[0];
 
   for (const date of allDates) {
-    const cached = readDisk(`espn_scoreboard_${date}`);
+    if (date > today) continue; // skip future dates
+    const cached = readDisk(`espn_scoreboard_${date}`, { allowStale: true });
     if (!cached) continue;
     for (const g of cached) {
       if (g.SeasonType !== 3) continue;          // only playoff/playin
