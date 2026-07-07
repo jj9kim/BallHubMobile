@@ -821,12 +821,16 @@ export async function getSchedule(season) {
 
   const allDates = dateRange(startDate, endDate);
 
-  // During offseason, don't re-fetch ESPN — just return what's cached
-  if (isOffseason()) {
+  // During offseason, only skip re-fetching dates already cached.
+  // Dates never fetched (missing entirely) must still be fetched once.
+  const missing = allDates.filter(date => !existsDisk(`espn_scoreboard_${date}`));
+
+  if (isOffseason() && missing.length === 0) {
+    // All dates cached — return from cache immediately
     const seen = new Set();
     const games = [];
     for (const date of allDates) {
-      const cached = readDisk(`espn_scoreboard_${date}`);
+      const cached = readDisk(`espn_scoreboard_${date}`, { allowStale: true });
       if (!cached) continue;
       for (const g of cached) {
         if (g.SeasonType !== 3) continue;
@@ -837,9 +841,6 @@ export async function getSchedule(season) {
     }
     return games.sort((a, b) => (a.Day ?? '').localeCompare(b.Day ?? ''));
   }
-
-  // Fetch any dates not yet in ESPN cache, in parallel batches
-  const missing = allDates.filter(date => readDisk(`espn_scoreboard_${date}`) === undefined);
 
   // If >80% already cached, return immediately (fast UX) and fetch rest in background
   const cacheRatio = missing.length / (allDates.length || 1);

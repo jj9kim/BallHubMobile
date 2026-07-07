@@ -42,6 +42,53 @@ app.listen(PORT, async () => {
   ]).then(async () => {
     console.log('Cache warmed: standings + schedule + all rosters');
 
+    // Pre-warm playoff scoreboard dates if not yet cached (run once, cached forever)
+    const { default: axios } = await import('axios');
+    const espnClient2 = axios.create({ baseURL: 'https://site.api.espn.com', timeout: 10000 });
+    const playoffStart = new Date('2026-04-12');
+    const playoffEnd   = new Date('2026-06-22');
+    const missingDates = [];
+    for (let d = new Date(playoffStart); d <= playoffEnd; d.setDate(d.getDate() + 1)) {
+      const ymd = d.toISOString().split('T')[0];
+      if (!existsDisk(`espn_scoreboard_${ymd}`)) missingDates.push(ymd);
+    }
+    if (missingDates.length > 0) {
+      console.log(`Fetching ${missingDates.length} uncached playoff scoreboard dates...`);
+      let fetched = 0;
+      for (const date of missingDates) {
+        try {
+          const { data } = await espnClient2.get(`/apis/site/v2/sports/basketball/nba/scoreboard`, { params: { dates: date.replace(/-/g,''), limit: 20 } });
+          const events = data?.events ?? [];
+          // Parse and cache using same format as getEspnGamesByDate
+          const games = events.map((e) => {
+            const comps = e.competitions?.[0];
+            const away = comps?.competitors?.find(c => c.homeAway === 'away');
+            const home = comps?.competitors?.find(c => c.homeAway === 'home');
+            const st = e.season?.type;
+            return {
+              GameID: parseInt(e.id),
+              Season: _season,
+              SeasonType: (st === 3 || st === 5) ? 3 : 1,
+              Status: comps?.status?.type?.description ?? 'Scheduled',
+              Day: date,
+              DateTime: e.date ?? null,
+              AwayTeam: away?.team?.abbreviation ?? '',
+              HomeTeam: home?.team?.abbreviation ?? '',
+              AwayTeamScore: parseInt(away?.score) || 0,
+              HomeTeamScore: parseInt(home?.score) || 0,
+              Quarter: null, TimeRemainingMinutes: null, TimeRemainingSeconds: null,
+            };
+          });
+          writeDisk(`espn_scoreboard_${date}`, games, 86400 * 365 * 100);
+          fetched++;
+        } catch {}
+        await new Promise(r => setTimeout(r, 150));
+      }
+      console.log(`✓ Playoff scoreboard pre-warm: ${fetched}/${missingDates.length} dates cached`);
+    } else {
+      console.log('✓ Playoff scoreboard dates already cached');
+    }
+
     // Pre-warm EVERYTHING for every active roster player — bio, career, game logs, seasonstats.
     // Roster is the source of truth for "active players". Draft class data misses undrafted
     // players, 2nd-round picks with limited data, recent call-ups, etc.
