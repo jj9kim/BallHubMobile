@@ -1509,6 +1509,33 @@ function parseTeamStats(data, maxGP = Infinity) {
   };
 }
 
+export async function getAllLeagueTeamStats(season = null, seasonType = 2) {
+  const seasonParam = parseInt(season ?? currentSeason());
+  const isPast = seasonParam < currentSeason();
+  const cacheKey = `league_team_stats_${seasonParam}_st${seasonType}`;
+  const cached = readDisk(cacheKey, { allowStale: isPast });
+  if (cached !== undefined) return cached;
+
+  const results = await Promise.allSettled(
+    ALL_NBA_TEAMS.map(async abbr => {
+      const slug = espnTeamSlug(abbr);
+      const { data } = await espnClient.get(
+        `/apis/site/v2/sports/basketball/nba/teams/${slug}/statistics`,
+        { params: { seasontype: seasonType, season: seasonParam } }
+      );
+      const maxGP = seasonType === 3 ? 28 : Infinity;
+      return { abbr, stats: parseTeamStats(data, maxGP) };
+    })
+  );
+
+  const teams = results
+    .filter(r => r.status === 'fulfilled' && r.value.stats && r.value.stats.GP > 0)
+    .map(r => r.value);
+
+  writeDisk(cacheKey, teams, isPast ? TTL_FOREVER : TTL_SEASON);
+  return teams;
+}
+
 // Fetch all 30 teams, compute per-stat rankings (1=best), cache result
 async function getLeagueTeamRankings(seasonType = 2, season = null) {
   const seasonParam = season ?? currentSeason();

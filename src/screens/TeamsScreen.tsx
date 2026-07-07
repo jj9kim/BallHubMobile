@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, SafeAreaView, FlatList,
   TouchableOpacity, Image, ActivityIndicator, ScrollView,
-  RefreshControl,
+  RefreshControl, Modal,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -20,7 +20,7 @@ const now = new Date();
 const month = now.getMonth(); // 0=Jan
 const IS_PLAYOFF_SEASON = (month === 3 && now.getDate() >= 12) || month === 4 || month === 5;
 
-type Tab = 'Overview' | 'Matches' | 'Playoffs' | 'Draft';
+type Tab = 'Overview' | 'Matches' | 'Playoffs' | 'Draft' | 'Stats';
 type StandingsView = 'All' | 'Conference' | 'Division';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -54,8 +54,8 @@ function todayYMD() { return toYMD(new Date()); }
 
 function TabBar({ active, onChange }: { active: Tab; onChange: (t: Tab) => void }) {
   const TABS: Tab[] = IS_PLAYOFF_SEASON
-    ? ['Overview', 'Matches', 'Playoffs', 'Draft']
-    : ['Overview', 'Matches', 'Draft'];
+    ? ['Overview', 'Matches', 'Playoffs', 'Stats', 'Draft']
+    : ['Overview', 'Matches', 'Stats', 'Draft'];
   return (
     <View style={s.tabBar}>
       {TABS.map(t => (
@@ -279,6 +279,142 @@ function DraftTab() {
   );
 }
 
+// ── League Stats Tab ──────────────────────────────────────────────────────────
+
+const STAT_COLS_DEF = [
+  { key: 'PTS',   label: 'PTS' },
+  { key: 'REB',   label: 'REB' },
+  { key: 'AST',   label: 'AST' },
+  { key: 'TOV',   label: 'TOV' },
+  { key: 'STL',   label: 'STL' },
+  { key: 'BLK',   label: 'BLK' },
+  { key: 'FGPct', label: 'FG%' },
+  { key: 'TPPct', label: '3P%' },
+  { key: 'FTPct', label: 'FT%' },
+];
+const LOWER_IS_BETTER = new Set(['TOV']);
+const SEASONS_LIST = [2025,2024,2023,2022,2021,2020,2019,2018,2017,2016];
+
+function LeagueStatsTab() {
+  const navigation = useNavigation<Nav>();
+  const [teams, setTeams]           = useState<{ abbr: string; stats: any }[]>([]);
+  const [loading, setLoading]       = useState(true);
+  const [sortKey, setSortKey]       = useState('PTS');
+  const [seasonType, setSeasonType] = useState(2);
+  const [season, setSeason]         = useState(2025);
+  const [showPicker, setShowPicker] = useState(false);
+
+  useEffect(() => {
+    setLoading(true);
+    setTeams([]);
+    NBAService.getLeagueTeamStats(season, seasonType)
+      .then(res => setTeams(res.teams ?? []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [season, seasonType]);
+
+  const fmt = (v: number, key: string) =>
+    key.includes('Pct') ? (v * 100).toFixed(1) + '%' : v?.toFixed(1) ?? '—';
+
+  const sorted = [...teams].sort((a, b) =>
+    LOWER_IS_BETTER.has(sortKey)
+      ? (a.stats?.[sortKey] ?? 0) - (b.stats?.[sortKey] ?? 0)
+      : (b.stats?.[sortKey] ?? 0) - (a.stats?.[sortKey] ?? 0)
+  );
+
+  return (
+    <View style={{ flex: 1 }}>
+      {/* Controls row */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 10, gap: 8 }}>
+        {/* Season picker button */}
+        <TouchableOpacity
+          onPress={() => setShowPicker(true)}
+          style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#1e1e1e', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderColor: '#2a2a2a' }}
+        >
+          <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>{season}-{String(season+1).slice(2)}</Text>
+          <Text style={{ color: '#6ee7b7', fontSize: 11 }}>▼</Text>
+        </TouchableOpacity>
+        {/* Regular / Playoffs toggle */}
+        <TouchableOpacity
+          onPress={() => setSeasonType(t => t === 2 ? 3 : 2)}
+          style={{ backgroundColor: '#1e1e1e', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderColor: seasonType === 3 ? '#6ee7b7' : '#2a2a2a' }}
+        >
+          <Text style={{ color: seasonType === 3 ? '#6ee7b7' : '#aaa', fontWeight: '600', fontSize: 13 }}>
+            {seasonType === 2 ? 'Regular Season' : 'Playoffs'}
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Season picker modal */}
+      <Modal visible={showPicker} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowPicker(false)}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: '#141414' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#2a2a2a' }}>
+            <Text style={{ color: '#fff', fontSize: 18, fontWeight: '700', flex: 1 }}>Select Season</Text>
+            <TouchableOpacity onPress={() => setShowPicker(false)} style={{ padding: 8 }}>
+              <Text style={{ color: '#6ee7b7', fontSize: 16, fontWeight: '600' }}>Done</Text>
+            </TouchableOpacity>
+          </View>
+          <ScrollView>
+            {SEASONS_LIST.map(yr => (
+              <TouchableOpacity
+                key={yr}
+                onPress={() => { setSeason(yr); setShowPicker(false); }}
+                style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: '#1e1e1e' }}
+              >
+                <Text style={{ color: season === yr ? '#6ee7b7' : '#fff', fontSize: 16, fontWeight: season === yr ? '700' : '400' }}>
+                  {yr}-{String(yr+1).slice(2)}
+                </Text>
+                {season === yr && <Text style={{ color: '#6ee7b7' }}>✓</Text>}
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
+
+      {/* Stat column selector */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 12, gap: 6, paddingBottom: 8 }}>
+        {STAT_COLS_DEF.map(col => (
+          <TouchableOpacity
+            key={col.key}
+            onPress={() => setSortKey(col.key)}
+            style={{ paddingHorizontal: 14, paddingVertical: 6, borderRadius: 16, backgroundColor: sortKey === col.key ? '#6ee7b7' : '#1e1e1e', borderWidth: 1, borderColor: sortKey === col.key ? '#6ee7b7' : '#333' }}
+          >
+            <Text style={{ color: sortKey === col.key ? '#000' : '#aaa', fontWeight: '600', fontSize: 13 }}>{col.label}</Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+
+      {/* Table */}
+      {loading ? (
+        <ActivityIndicator color="#fff" style={{ marginTop: 40 }} />
+      ) : (
+        <ScrollView contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: 40 }}>
+          {sorted.map((t, i) => {
+            const val = t.stats?.[sortKey];
+            return (
+              <TouchableOpacity
+                key={t.abbr}
+                onPress={() => navigation.navigate('TeamProfile', {
+                  teamKey: t.abbr,
+                  teamCity: teamFullNames[t.abbr]?.split(' ').slice(0, -1).join(' ') ?? t.abbr,
+                  teamName: teamFullNames[t.abbr]?.split(' ').slice(-1)[0] ?? t.abbr,
+                })}
+                style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#1e1e1e', gap: 12 }}
+                activeOpacity={0.7}
+              >
+                <Text style={{ color: '#444', fontSize: 12, fontWeight: '700', width: 22, textAlign: 'right' }}>{i + 1}</Text>
+                <TeamLogo abbrev={t.abbr} size={28} />
+                <Text style={{ color: '#fff', fontSize: 14, fontWeight: '600', flex: 1 }}>{teamFullNames[t.abbr] ?? t.abbr}</Text>
+                <Text style={{ color: '#6ee7b7', fontSize: 16, fontWeight: '700', minWidth: 52, textAlign: 'right' }}>{fmt(val, sortKey)}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      )}
+    </View>
+  );
+}
+
 // ── Main Screen ───────────────────────────────────────────────────────────────
 
 export default function TeamsScreen() {
@@ -306,6 +442,7 @@ export default function TeamsScreen() {
           {activeTab === 'Overview'  && <OverviewTab standings={standings} />}
           {activeTab === 'Matches'   && <MatchesTab  standings={standings} />}
           {activeTab === 'Playoffs'  && <PlayoffBracket season={2025} />}
+          {activeTab === 'Stats'     && <LeagueStatsTab />}
           {activeTab === 'Draft'     && <DraftTab />}
         </View>
       )}

@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getAllTeams, getTeamRoster, getHistoricalRoster, getTeamSchedule, getDraftClass, getTeamSalaries, getTeamSeasonStats, getPlayerSeasonStats, getPlayerCareerStats, existsDisk, readDisk, ESPN_TEAM_ALIASES } from '../services/nbaApiService.js';
+import { getAllTeams, getTeamRoster, getHistoricalRoster, getTeamSchedule, getDraftClass, getTeamSalaries, getTeamSeasonStats, getAllLeagueTeamStats, getPlayerSeasonStats, getPlayerCareerStats, existsDisk, readDisk, ESPN_TEAM_ALIASES } from '../services/nbaApiService.js';
 
 const CURRENT_SEASON = (() => { const n = new Date(); return n.getMonth() + 1 >= 10 ? n.getFullYear() : n.getFullYear() - 1; })();
 
@@ -42,6 +42,16 @@ router.get('/:team/schedule/:season', async (req, res) => {
   try {
     const games = await getTeamSchedule(req.params.season, req.params.team.toUpperCase());
     res.json({ success: true, games, count: games.length });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// GET /api/teams/league-stats/:season/:seasontype
+router.get('/league-stats/:season/:seasontype', async (req, res) => {
+  try {
+    const teams = await getAllLeagueTeamStats(req.params.season, parseInt(req.params.seasontype));
+    res.json({ success: true, teams });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
