@@ -16,9 +16,7 @@ type Nav = NativeStackNavigationProp<RootStackParamList>;
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 // Show Playoffs tab mid-April through mid-June
-const now = new Date();
-const month = now.getMonth(); // 0=Jan
-const IS_PLAYOFF_SEASON = (month === 3 && now.getDate() >= 12) || month === 4 || month === 5;
+// Playoffs tab always visible — bracket is useful year-round for looking back
 
 type Tab = 'Overview' | 'Matches' | 'Playoffs' | 'Draft' | 'Stats';
 type StandingsView = 'All' | 'Conference' | 'Division';
@@ -53,9 +51,7 @@ function todayYMD() { return toYMD(new Date()); }
 // ── Tab Bar ───────────────────────────────────────────────────────────────────
 
 function TabBar({ active, onChange }: { active: Tab; onChange: (t: Tab) => void }) {
-  const TABS: Tab[] = IS_PLAYOFF_SEASON
-    ? ['Overview', 'Matches', 'Playoffs', 'Stats', 'Draft']
-    : ['Overview', 'Matches', 'Stats', 'Draft'];
+  const TABS: Tab[] = ['Overview', 'Matches', 'Playoffs', 'Stats', 'Draft'];
   return (
     <View style={s.tabBar}>
       {TABS.map(t => (
