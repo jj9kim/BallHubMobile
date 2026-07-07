@@ -1757,7 +1757,7 @@ export async function getPlayerCareerStats(playerId) {
 // Dynamically compute the "active" season year.
 // NBA season runs Oct→Jun. Season year = the calendar year it ENDS.
 // Jul-Sep = offseason: no active season, cache everything as permanent.
-const TTL_FOREVER  = 86400 * 365 * 10; // 10 years — effectively permanent
+const TTL_FOREVER  = 86400 * 365 * 100; // 100 years — never expires
 const TTL_BIO      = 86400 * 60;       // 60 days for player bio (physical data rarely changes)
 const TTL_CAREER   = 86400 * 365;      // 1 year (mostly unused, career stats cache forever)
 const TTL_SEASON   = 86400 * 7;        // 7 days for active season stats / game logs

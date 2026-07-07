@@ -77,7 +77,9 @@ router.get('/:team/player-stats/:season', async (req, res) => {
       if (isPast) {
         // allowStale: past season data never changes, expired cache is still valid
         const careerSeasons = readDisk(`career_seasons_${p.PlayerID}`, { allowStale: true });
-        const stats = careerSeasons?.find(s => s.SeasonYear === season) ?? null;
+        // Career stats use end-year convention: 2020-21 season → SeasonYear=2021
+        // Our season param uses start-year: season=2020 means 2020-21
+        const stats = careerSeasons?.find(s => s.SeasonYear === season + 1) ?? null;
         return { player: p, stats };
       } else {
         return { player: p, stats: readDisk(`seasonstats_${p.PlayerID}_${season}`) ?? null };
