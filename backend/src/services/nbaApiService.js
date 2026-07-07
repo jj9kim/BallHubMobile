@@ -1475,8 +1475,10 @@ function parseTeamStats(data, maxGP = Infinity) {
 }
 
 // Fetch all 30 teams, compute per-stat rankings (1=best), cache result
-async function getLeagueTeamRankings(seasonType = 2) {
-  const cacheKey = `league_team_rankings_st${seasonType}`;
+async function getLeagueTeamRankings(seasonType = 2, season = null) {
+  const seasonParam = season ?? currentSeason();
+  const isPast = seasonParam < currentSeason();
+  const cacheKey = `league_team_rankings_${seasonParam}_st${seasonType}`;
   const cached = readDisk(cacheKey);
   if (cached !== undefined) return cached;
 
@@ -1485,7 +1487,7 @@ async function getLeagueTeamRankings(seasonType = 2) {
       const slug = espnTeamSlug(abbr);
       const { data } = await espnClient.get(
         `/apis/site/v2/sports/basketball/nba/teams/${slug}/statistics`,
-        { params: { seasontype: seasonType } }
+        { params: { seasontype: seasonType, season: seasonParam } }
       );
       const maxGP = seasonType === 3 ? 28 : Infinity;
       return { abbr, stats: parseTeamStats(data, maxGP) };
@@ -1513,32 +1515,34 @@ async function getLeagueTeamRankings(seasonType = 2) {
     });
   }
 
-  writeDisk(cacheKey, rankings, TTL_SEASON);
+  writeDisk(cacheKey, rankings, isPast ? TTL_FOREVER : TTL_SEASON);
   return rankings;
 }
 
 export async function getTeamSeasonStats(season, teamAbbr) {
+  season = parseInt(season);
   const appAbbr  = teamAbbr.toUpperCase();
   const slug     = espnTeamSlug(appAbbr);
-  const cacheKey = `teamstats_espn_${appAbbr}_v2`;
+  const isPast   = season < currentSeason();
+  const cacheKey = `teamstats_espn_${appAbbr}_${season}`;
 
   const [statsRes, regRankings, poRankings] = await Promise.allSettled([
     (async () => {
       const cached = readDisk(cacheKey);
       if (cached !== undefined) return cached;
       const [regRes, poRes] = await Promise.allSettled([
-        espnClient.get(`/apis/site/v2/sports/basketball/nba/teams/${slug}/statistics`, { params: { seasontype: 2 } }),
-        espnClient.get(`/apis/site/v2/sports/basketball/nba/teams/${slug}/statistics`, { params: { seasontype: 3 } }),
+        espnClient.get(`/apis/site/v2/sports/basketball/nba/teams/${slug}/statistics`, { params: { seasontype: 2, season } }),
+        espnClient.get(`/apis/site/v2/sports/basketball/nba/teams/${slug}/statistics`, { params: { seasontype: 3, season } }),
       ]);
       const result = {
-        regular:  regRes.status === 'fulfilled' ? parseTeamStats(regRes.value.data)       : null,
-        playoffs: poRes.status  === 'fulfilled' ? parseTeamStats(poRes.value.data, 28)   : null,
+        regular:  regRes.status === 'fulfilled' ? parseTeamStats(regRes.value.data)     : null,
+        playoffs: poRes.status  === 'fulfilled' ? parseTeamStats(poRes.value.data, 28) : null,
       };
-      writeDisk(cacheKey, result, TTL_SEASON);
+      writeDisk(cacheKey, result, isPast ? TTL_FOREVER : TTL_SEASON);
       return result;
     })(),
-    getLeagueTeamRankings(2),
-    getLeagueTeamRankings(3),
+    getLeagueTeamRankings(2, season),
+    getLeagueTeamRankings(3, season),
   ]);
 
   const stats    = statsRes.status === 'fulfilled' ? statsRes.value : { regular: null, playoffs: null };
