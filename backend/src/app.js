@@ -6,7 +6,7 @@ import gamesRouter from './routes/games.js';
 import standingsRouter from './routes/standings.js';
 import teamsRouter from './routes/teams.js';
 import playersRouter from './routes/players.js';
-import { getStandings, getSchedule, getDraftClass, getAllHistoricalPlayers, getPlayerById, getPlayerCareerStats, getPlayerGameLogs, getTeamRoster, getHistoricalRoster, getEspnGamesByDate, existsDisk, getAllPlayerSeasonStats, getPlayerSeasonStats, writeDisk, CACHE_DIR } from './services/nbaApiService.js';
+import { getStandings, getSchedule, getDraftClass, getAllHistoricalPlayers, getPlayerById, getPlayerCareerStats, getPlayerGameLogs, getTeamRoster, getHistoricalRoster, getEspnGamesByDate, getTeamSeasonStats, existsDisk, getAllPlayerSeasonStats, getPlayerSeasonStats, writeDisk, CACHE_DIR } from './services/nbaApiService.js';
 
 const app = express();
 const PORT = process.env.PORT ?? 5000;
@@ -61,6 +61,27 @@ app.listen(PORT, async () => {
       console.log(`✓ Playoff scoreboard: ${fetched} dates cached`);
     } else {
       console.log('✓ Playoff scoreboard dates already cached');
+    }
+
+    // Pre-warm OPP_PTS for all 30 teams (sequential to avoid NBA.com rate limits)
+    const OPP_TEAMS = [
+      'ATL','BOS','BKN','CHA','CHI','CLE','DAL','DEN','DET','GSW',
+      'HOU','IND','LAC','LAL','MEM','MIA','MIL','MIN','NOP','NY',
+      'OKC','ORL','PHI','PHO','POR','SAC','SA','TOR','UTA','WAS',
+    ];
+    const missingOpp = OPP_TEAMS.filter(t =>
+      !existsDisk(`opp_pts_${t}_${_season}_Regular_Season`) ||
+      !existsDisk(`opp_pts_${t}_${_season}_Playoffs`)
+    );
+    if (missingOpp.length > 0) {
+      console.log(`Pre-warming OPP_PTS for ${missingOpp.length} teams...`);
+      for (const team of missingOpp) {
+        await getTeamSeasonStats(_season, team).catch(() => {});
+        await new Promise(r => setTimeout(r, 500));
+      }
+      console.log('✓ OPP_PTS pre-warm complete');
+    } else {
+      console.log('✓ OPP_PTS already cached for all teams');
     }
 
     // Pre-warm EVERYTHING for every active roster player — bio, career, game logs, seasonstats.
