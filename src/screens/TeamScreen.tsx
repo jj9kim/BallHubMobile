@@ -1033,7 +1033,7 @@ function DraftTab({ teamKey }: { teamKey: string }) {
   );
 }
 
-type SortKey = 'PTS' | 'REB' | 'AST' | 'STL' | 'BLK' | 'FG' | 'GP' | 'FG_PCT' | 'FG3_PCT' | 'FT_PCT';
+type SortKey = 'PTS' | 'REB' | 'AST' | 'STL' | 'BLK' | 'FG' | 'GP' | 'FG_PCT' | 'FG3_PCT' | 'FT_PCT' | 'MIN' | 'TOV' | 'PF';
 
 // ── Player Stat Row Component ──────────────────────────────────────────────────
 function PlayerStatRowComp({ player, stats, statValue, teamKey, isFirst, onPress }: {
@@ -1294,6 +1294,9 @@ function StatsTab({ teamKey }: { teamKey: string }) {
           { key: 'FG_PCT',  label: 'FG%',      getValue: s => s?.FieldGoalsPercentage ?? 0,    fmt: v => (v * 100).toFixed(1) + '%' },
           { key: 'FG3_PCT', label: '3P%',      getValue: s => s?.ThreePointersPercentage ?? 0, fmt: v => (v * 100).toFixed(1) + '%' },
           { key: 'FT_PCT',  label: 'FT%',      getValue: s => s?.FreeThrowsPercentage ?? 0,    fmt: v => (v * 100).toFixed(1) + '%' },
+          { key: 'MIN',     label: 'Minutes',  getValue: s => s?.Minutes ?? 0 },
+          { key: 'TOV',     label: 'Turnovers', getValue: s => s?.Turnovers ?? 0 },
+          { key: 'PF',      label: 'Fouls',    getValue: s => s?.PersonalFouls ?? 0 },
         ];
 
         const renderStatCard = (stat: typeof STAT_CATEGORIES[0]) => {
