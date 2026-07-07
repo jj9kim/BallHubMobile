@@ -6,7 +6,7 @@ import gamesRouter from './routes/games.js';
 import standingsRouter from './routes/standings.js';
 import teamsRouter from './routes/teams.js';
 import playersRouter from './routes/players.js';
-import { getStandings, getSchedule, getDraftClass, getAllHistoricalPlayers, getPlayerById, getPlayerCareerStats, getPlayerGameLogs, getTeamRoster, existsDisk, getAllPlayerSeasonStats, getPlayerSeasonStats, writeDisk, CACHE_DIR } from './services/nbaApiService.js';
+import { getStandings, getSchedule, getDraftClass, getAllHistoricalPlayers, getPlayerById, getPlayerCareerStats, getPlayerGameLogs, getTeamRoster, getHistoricalRoster, existsDisk, getAllPlayerSeasonStats, getPlayerSeasonStats, writeDisk, CACHE_DIR } from './services/nbaApiService.js';
 
 const app = express();
 const PORT = process.env.PORT ?? 5000;
@@ -237,5 +237,40 @@ app.listen(PORT, async () => {
     }
 
     console.log(`\n✓ Full cache warm complete — all active players now load instantly forever`);
+
+    // ── Historical seasons pre-warm (2016–2024) ──────────────────────────────
+    // For each past season: cache historical roster + career stats for every player.
+    // Career stats cover all seasons so one fetch per player covers everything.
+    // Past season data never changes — cached forever. Runs once, silently.
+    const HIST_SEASONS = [2024,2023,2022,2021,2020,2019,2018,2017,2016];
+    const HIST_TEAMS   = [
+      'ATL','BOS','BKN','CHA','CHI','CLE','DAL','DEN','DET','GSW',
+      'HOU','IND','LAC','LAL','MEM','MIA','MIL','MIN','NOP','NY',
+      'OKC','ORL','PHI','PHO','POR','SAC','SA','TOR','UTA','WAS',
+    ];
+
+    console.log('\n=== Historical Stats Pre-warm (2016–2024) ===');
+    const seenPlayers = new Set();
+    let hRosters = 0, hPlayers = 0;
+
+    for (const season of HIST_SEASONS) {
+      for (const team of HIST_TEAMS) {
+        try {
+          const roster = await getHistoricalRoster(team, season);
+          hRosters++;
+          for (const p of roster) {
+            if (seenPlayers.has(p.PlayerID)) continue;
+            seenPlayers.add(p.PlayerID);
+            if (!existsDisk(`career_seasons_${p.PlayerID}`)) {
+              await getPlayerCareerStats(p.PlayerID).catch(() => {});
+              await new Promise(r => setTimeout(r, 400));
+              hPlayers++;
+            }
+          }
+        } catch {}
+      }
+      console.log(`Historical ${season}-${String(season+1).slice(2)}: rosters cached`);
+    }
+    console.log(`✓ Historical pre-warm complete — ${hRosters} rosters, ${hPlayers} new career stat fetches`);
   })();
 });

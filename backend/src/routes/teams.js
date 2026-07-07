@@ -1,5 +1,7 @@
 import { Router } from 'express';
-import { getAllTeams, getTeamRoster, getTeamSchedule, getDraftClass, getTeamSalaries, getTeamSeasonStats, getPlayerSeasonStats, existsDisk, readDisk, ESPN_TEAM_ALIASES } from '../services/nbaApiService.js';
+import { getAllTeams, getTeamRoster, getHistoricalRoster, getTeamSchedule, getDraftClass, getTeamSalaries, getTeamSeasonStats, getPlayerSeasonStats, getPlayerCareerStats, existsDisk, readDisk, ESPN_TEAM_ALIASES } from '../services/nbaApiService.js';
+
+const CURRENT_SEASON = (() => { const n = new Date(); return n.getMonth() + 1 >= 10 ? n.getFullYear() : n.getFullYear() - 1; })();
 
 const router = Router();
 
@@ -55,27 +57,47 @@ router.get('/:team/stats/:season', async (req, res) => {
   }
 });
 
-// GET /api/teams/:team/player-stats/:season  — all roster players' season averages
-// Serves only from disk cache for instant response. Kicks off background fills for
-// any players missing stats so they'll be ready next time.
+// GET /api/teams/:team/player-stats/:season
 router.get('/:team/player-stats/:season', async (req, res) => {
   try {
     const team   = req.params.team.toUpperCase();
     const season = parseInt(req.params.season);
-    const roster = await getTeamRoster(team);
-    const players = Array.isArray(roster) ? roster : (roster.players ?? []);
+    const isPast = season < CURRENT_SEASON;
 
-    const playerStats = players.map(p => ({
-      player: p,
-      stats: readDisk(`seasonstats_${p.PlayerID}_${season}`) ?? null,
-    }));
+    // Use historical roster for past seasons, current roster for current season
+    let players;
+    if (isPast) {
+      players = await getHistoricalRoster(team, season);
+    } else {
+      const roster = await getTeamRoster(team);
+      players = Array.isArray(roster) ? roster : (roster.players ?? []);
+    }
+
+    const playerStats = players.map(p => {
+      if (isPast) {
+        // Pull from career stats — find the matching season year
+        const careerSeasons = readDisk(`career_seasons_${p.PlayerID}`);
+        const stats = careerSeasons?.find(s => s.SeasonYear === season) ?? null;
+        return { player: p, stats };
+      } else {
+        return { player: p, stats: readDisk(`seasonstats_${p.PlayerID}_${season}`) ?? null };
+      }
+    });
 
     res.json({ success: true, players: playerStats });
 
-    // Background: fill any missing stats so next load is complete
-    for (const p of players) {
-      if (!existsDisk(`seasonstats_${p.PlayerID}_${season}`)) {
-        getPlayerSeasonStats(season, p.PlayerID).catch(() => {});
+    // Background: fill any missing career stats for past seasons
+    if (isPast) {
+      for (const p of players) {
+        if (!existsDisk(`career_seasons_${p.PlayerID}`)) {
+          getPlayerCareerStats(p.PlayerID).catch(() => {});
+        }
+      }
+    } else {
+      for (const p of players) {
+        if (!existsDisk(`seasonstats_${p.PlayerID}_${season}`)) {
+          getPlayerSeasonStats(season, p.PlayerID).catch(() => {});
+        }
       }
     }
   } catch (err) {

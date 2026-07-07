@@ -1227,6 +1227,41 @@ export async function getTeamRoster(teamAbbr) {
   }));
 }
 
+export async function getHistoricalRoster(teamAbbr, season) {
+  season = parseInt(season);
+  const appAbbr  = teamAbbr.toUpperCase();
+  const teamId   = TEAM_IDS[appAbbr];
+  if (!teamId) return [];
+  const cacheKey = `roster_historical_${appAbbr}_${season}`;
+  const cached   = readDisk(cacheKey);
+  if (cached !== undefined) return cached;
+
+  const data = await nbFetch('/stats/commonteamroster', {
+    Season: toSeasonStr(season), TeamID: teamId,
+  }, TTL_FOREVER, cacheKey);
+
+  const rows = parseRS(data.resultSets, 'CommonTeamRoster');
+  const result = rows.map(p => ({
+    PlayerID:   p.PLAYER_ID,
+    FirstName:  p.PLAYER?.split(' ')[0] ?? '',
+    LastName:   p.PLAYER?.split(' ').slice(1).join(' ') ?? '',
+    Team:       appAbbr,
+    TeamID:     teamId,
+    Position:   p.POSITION ?? '',
+    Jersey:     parseInt(p.NUM) || 0,
+    Height:     parseHeight(p.HEIGHT),
+    Weight:     parseInt(p.WEIGHT) || 0,
+    BirthDate:  p.BIRTH_DATE ?? null,
+    College:    p.SCHOOL ?? null,
+    Experience: parseInt(p.EXP) || 0,
+    Status:     'Active',
+    PhotoUrl:   `https://cdn.nba.com/headshots/nba/latest/1040x760/${p.PLAYER_ID}.png`,
+    NbaDotComPlayerID: p.PLAYER_ID,
+  }));
+  writeDisk(cacheKey, result, TTL_FOREVER);
+  return result;
+}
+
 function parseHeight(h) {
   if (!h) return 0;
   const parts = String(h).split('-');

@@ -1189,24 +1189,10 @@ function StatsTab({ teamKey }: { teamKey: string }) {
       .catch(() => {})
       .finally(() => setLoading(false));
 
-    let attempts = 0;
-    const fetchPlayerStats = () => {
-      NBAService.getTeamPlayerStats(teamKey, selectedSeason)
-        .then(res => {
-          const players = res.players ?? [];
-          setRosterStats(players);
-          const hasStats = players.filter(p => p.stats).length;
-          // If backend is still computing (most are null), retry up to 8 times
-          if (hasStats === 0 && attempts < 8) {
-            attempts++;
-            setTimeout(fetchPlayerStats, 4000);
-          } else {
-            setLoadingRoster(false);
-          }
-        })
-        .catch(() => setLoadingRoster(false));
-    };
-    fetchPlayerStats();
+    NBAService.getTeamPlayerStats(teamKey, selectedSeason)
+      .then(res => setRosterStats(res.players ?? []))
+      .catch(() => {})
+      .finally(() => setLoadingRoster(false));
   }, [teamKey, selectedSeason]);
 
   const fmtPct = (v: number) => v ? (v * 100).toFixed(1) + '%' : '—';
@@ -1335,23 +1321,17 @@ function StatsTab({ teamKey }: { teamKey: string }) {
       )}
 
       {/* ── Player Stats ── */}
-      {(() => {
-        const statsReady = rosterStats.filter(p => p.stats).length;
-        const isComputing = !loadingRoster && rosterStats.length > 0 && statsReady === 0;
-        if (loadingRoster || isComputing) return (
-          <View style={s.card}>
-            <Text style={s.sectionLabel}>Player Stats</Text>
-            <ActivityIndicator color="#fff" style={{ marginTop: 12 }} />
-            {isComputing && <Text style={{ color: '#555', fontSize: 12, textAlign: 'center', marginTop: 8, marginBottom: 4 }}>Computing historical stats…</Text>}
-          </View>
-        );
-        if (rosterStats.length === 0) return (
-          <View style={s.card}>
-            <Text style={s.sectionLabel}>Player Stats</Text>
-            <Text style={[s.emptyText, { marginTop: 12 }]}>No player data</Text>
-          </View>
-        );
-        return (() => {
+      {loadingRoster ? (
+        <View style={s.card}>
+          <Text style={s.sectionLabel}>Player Stats</Text>
+          <ActivityIndicator color="#fff" style={{ marginVertical: 16 }} />
+        </View>
+      ) : rosterStats.length === 0 ? (
+        <View style={s.card}>
+          <Text style={s.sectionLabel}>Player Stats</Text>
+          <Text style={[s.emptyText, { marginTop: 12 }]}>No player data</Text>
+        </View>
+      ) : (() => {
         const STAT_CATEGORIES: { key: SortKey; label: string; getValue: (st: any) => number; fmt?: (v: number) => string }[] = [
           { key: 'PTS',     label: 'Points',   getValue: s => s?.Points ?? 0 },
           { key: 'REB',     label: 'Rebounds', getValue: s => s?.Rebounds ?? 0 },
@@ -1410,7 +1390,6 @@ function StatsTab({ teamKey }: { teamKey: string }) {
             {STAT_CATEGORIES.map(stat => renderStatCard(stat))}
           </>
         );
-        })();
       })()}
     </ScrollView>
   );
