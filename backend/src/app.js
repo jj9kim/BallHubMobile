@@ -79,6 +79,12 @@ app.listen(PORT, async () => {
         await getTeamSeasonStats(_season, team).catch(() => {});
         await new Promise(r => setTimeout(r, 500));
       }
+      // Bust league stats cache so it rebuilds with fresh OPP_PTS
+      const { readdirSync: rds2, unlinkSync } = await import('fs');
+      const { join: join2 } = await import('path');
+      rds2(CACHE_DIR).filter(f => f.startsWith('league_team_stats_')).forEach(f => {
+        try { unlinkSync(join2(CACHE_DIR, f)); } catch {}
+      });
       console.log('✓ OPP_PTS pre-warm complete');
     } else {
       console.log('✓ OPP_PTS already cached for all teams');
