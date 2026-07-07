@@ -1266,10 +1266,11 @@ function StatsTab({ teamKey }: { teamKey: string }) {
           <View style={s.card}>
             <View style={{ flexDirection: 'row' }}>
               {[
-                { val: fmt(st.PTS),     label: 'PTS',  rankKey: 'PTS' },
-                { val: fmt(st.OPP_PTS), label: 'OPP',  rankKey: null },
-                { val: fmt(st.AST),     label: 'AST',  rankKey: 'AST' },
-                { val: fmt(st.TOV),     label: 'TOV',  rankKey: 'TOV' },
+                { val: fmt(st.PTS),     label: 'PTS', rankKey: 'PTS' },
+                { val: fmt(st.OPP_PTS), label: 'OPP', rankKey: 'OPP_PTS' },
+                { val: fmt(st.REB),     label: 'REB', rankKey: 'REB' },
+                { val: fmt(st.AST),     label: 'AST', rankKey: 'AST' },
+                { val: fmt(st.TOV),     label: 'TOV', rankKey: 'TOV' },
               ].map(({ val, label, rankKey }, i) => (
                 <View key={label} style={[s.bigStatBox, i > 0 && { borderLeftWidth: 1, borderLeftColor: '#2a2a2a' }]}>
                   <Text style={s.bigStatVal}>{val}</Text>

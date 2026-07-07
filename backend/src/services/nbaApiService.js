@@ -1562,16 +1562,34 @@ async function getLeagueTeamRankings(seasonType = 2, season = null) {
     .filter(r => r.status === 'fulfilled' && r.value.stats && r.value.stats.GP > 0)
     .map(r => r.value);
 
-  // For each stat, rank all teams (lower TOV = better rank, higher everything else)
-  const LOWER_IS_BETTER = new Set(['TOV']);
-  const STAT_KEYS = ['PTS','REB','AST','TOV','STL','BLK','OREB','DREB','FGPct','TPPct','FTPct'];
+  // Compute OPP_PTS for each team from cached schedules (pure disk reads)
+  const FINAL_STATUSES = ['Final','F/OT','F/2OT','F/3OT'];
+  const schedType = seasonType === 3 ? 3 : 1; // playoff or regular season games
+  for (const t of teams) {
+    try {
+      const schedule = await getTeamSchedule(seasonParam, t.abbr);
+      const gs = schedule.filter(g => g.SeasonType === schedType && FINAL_STATUSES.includes(g.Status));
+      if (gs.length) {
+        const total = gs.reduce((sum, g) => {
+          const opp = g.HomeTeam === t.abbr ? g.AwayTeamScore : g.HomeTeamScore;
+          return sum + (opp ?? 0);
+        }, 0);
+        t.stats.OPP_PTS = total / gs.length;
+      }
+    } catch {}
+  }
+
+  // For each stat, rank all teams (lower is better for TOV and OPP_PTS)
+  const LOWER_IS_BETTER = new Set(['TOV', 'OPP_PTS']);
+  const STAT_KEYS = ['PTS','REB','AST','TOV','STL','BLK','OREB','DREB','FGPct','TPPct','FTPct','OPP_PTS'];
 
   const rankings = {}; // { abbr: { PTS: 3, REB: 12, ... } }
   for (const key of STAT_KEYS) {
-    const sorted = [...teams].sort((a, b) =>
+    const eligible = teams.filter(t => t.stats[key] != null);
+    const sorted = [...eligible].sort((a, b) =>
       LOWER_IS_BETTER.has(key)
-        ? a.stats[key] - b.stats[key]   // ascending: lower = rank 1
-        : b.stats[key] - a.stats[key]   // descending: higher = rank 1
+        ? a.stats[key] - b.stats[key]
+        : b.stats[key] - a.stats[key]
     );
     sorted.forEach((t, i) => {
       if (!rankings[t.abbr]) rankings[t.abbr] = {};
