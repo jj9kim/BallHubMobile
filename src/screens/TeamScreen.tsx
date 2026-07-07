@@ -1156,8 +1156,11 @@ function ViewAllModal({ stat, teamKey, onClose, onPlayer }: {
   );
 }
 
+const SEASONS = [2025,2024,2023,2022,2021,2020,2019,2018,2017,2016];
+
 function StatsTab({ teamKey }: { teamKey: string }) {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const [selectedSeason, setSelectedSeason] = useState(2025);
   const [regular,      setRegular]      = useState<any>(null);
   const [playoffs,     setPlayoffs]     = useState<any>(null);
   const [regularRanks, setRegularRanks] = useState<any>({});
@@ -1169,7 +1172,12 @@ function StatsTab({ teamKey }: { teamKey: string }) {
   const [viewAllStat, setViewAllStat] = useState<{ key: SortKey; label: string; players: { player: any; stats: any }[]; fmtVal: (v: number) => string; getValue: (st: any) => number } | null>(null);
 
   useEffect(() => {
-    NBAService.getTeamSeasonStats(teamKey)
+    setLoading(true);
+    setLoadingRoster(true);
+    setRegular(null);
+    setPlayoffs(null);
+    setRosterStats([]);
+    NBAService.getTeamSeasonStats(teamKey, selectedSeason)
       .then(res => {
         setRegular(res.regular);
         setPlayoffs(res.playoffs);
@@ -1178,11 +1186,11 @@ function StatsTab({ teamKey }: { teamKey: string }) {
       })
       .catch(() => {})
       .finally(() => setLoading(false));
-    NBAService.getTeamPlayerStats(teamKey)
+    NBAService.getTeamPlayerStats(teamKey, selectedSeason)
       .then(res => setRosterStats(res.players ?? []))
       .catch(() => {})
       .finally(() => setLoadingRoster(false));
-  }, [teamKey]);
+  }, [teamKey, selectedSeason]);
 
   const fmtPct = (v: number) => v ? (v * 100).toFixed(1) + '%' : '—';
   const fmt    = (v: number, d = 1) => v != null ? v.toFixed(d) : '—';
@@ -1192,6 +1200,21 @@ function StatsTab({ teamKey }: { teamKey: string }) {
 
   return (
     <ScrollView contentContainerStyle={{ paddingHorizontal: 12, paddingTop: 12, paddingBottom: 40, gap: 10 }}>
+      {/* Season selector */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 4 }}>
+        {SEASONS.map(s => (
+          <TouchableOpacity
+            key={s}
+            onPress={() => setSelectedSeason(s)}
+            style={{ paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20, backgroundColor: selectedSeason === s ? '#6ee7b7' : '#1e1e1e', borderWidth: 1, borderColor: selectedSeason === s ? '#6ee7b7' : '#333' }}
+          >
+            <Text style={{ color: selectedSeason === s ? '#000' : '#aaa', fontWeight: '600', fontSize: 13 }}>
+              {s}-{String(s + 1).slice(2)}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+
       {/* Toggle */}
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
         <Text style={s.sectionLabel}>{view === 'playoffs' ? 'Playoff Stats' : 'Season Stats'}</Text>
