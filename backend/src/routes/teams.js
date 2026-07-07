@@ -15,6 +15,16 @@ router.get('/', async (req, res) => {
   }
 });
 
+// GET /api/teams/league-stats/:season/:seasontype  — must be BEFORE /:team wildcard
+router.get('/league-stats/:season/:seasontype', async (req, res) => {
+  try {
+    const teams = await getAllLeagueTeamStats(req.params.season, parseInt(req.params.seasontype));
+    res.json({ success: true, teams });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // GET /api/teams/:team  — team abbreviation e.g. LAL
 router.get('/:team', async (req, res) => {
   try {
@@ -42,16 +52,6 @@ router.get('/:team/schedule/:season', async (req, res) => {
   try {
     const games = await getTeamSchedule(req.params.season, req.params.team.toUpperCase());
     res.json({ success: true, games, count: games.length });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-// GET /api/teams/league-stats/:season/:seasontype
-router.get('/league-stats/:season/:seasontype', async (req, res) => {
-  try {
-    const teams = await getAllLeagueTeamStats(req.params.season, parseInt(req.params.seasontype));
-    res.json({ success: true, teams });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
