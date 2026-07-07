@@ -1265,8 +1265,6 @@ function StatsTab({ teamKey }: { teamKey: string }) {
               <View style={s.divider} />
               <View style={s.psRow}><Text style={s.psLabel}>Turnovers</Text><View style={{ flexDirection: 'row', alignItems: 'center' }}><Text style={s.psValue}>{fmt(st.TOV)}</Text><RankBadge rank={ranks.TOV} /></View></View>
               <View style={s.divider} />
-              <View style={s.psRow}><Text style={s.psLabel}>Plus / Minus</Text><Text style={[s.psValue, { color: st.PlusMinus >= 0 ? '#4caf50' : '#e05a5a' }]}>{st.PlusMinus >= 0 ? '+' : ''}{fmt(st.PlusMinus)}</Text></View>
-              <View style={s.divider} />
               <View style={s.psRow}><Text style={s.psLabel}>Games Played</Text><Text style={s.psValue}>{st.GP}</Text></View>
             </View>
           </View>
