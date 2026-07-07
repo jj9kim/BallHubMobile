@@ -1462,8 +1462,8 @@ const s = StyleSheet.create({
   playerStatName:   { color: '#fff', fontSize: 13, fontWeight: '600' },
   playerStatPos:    { color: '#555', fontSize: 10, marginTop: 2 },
   playerStatValue:  { color: '#fff', fontSize: 14, fontWeight: '700', minWidth: 50, textAlign: 'right' },
-  viewAllBtn:       { marginTop: 12, paddingVertical: 8, borderTopWidth: 1, borderTopColor: '#2a2a2a', alignItems: 'center' },
-  viewAllBtnText:   { color: '#888', fontSize: 11, fontWeight: '600' },
+  viewAllBtn:       { marginTop: 12, paddingVertical: 10, borderTopWidth: 1, borderTopColor: '#2a2a2a', alignItems: 'center' },
+  viewAllBtnText:   { color: '#6ee7b7', fontSize: 13, fontWeight: '600' },
 
   // ── standings ────────────────────────────────────────────────────────────────
   standRow:           { flexDirection: 'row', alignItems: 'center' },
