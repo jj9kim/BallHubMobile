@@ -1266,10 +1266,10 @@ function StatsTab({ teamKey }: { teamKey: string }) {
           <View style={s.card}>
             <View style={{ flexDirection: 'row' }}>
               {[
-                { val: fmt(st.PTS), label: 'PTS', rankKey: 'PTS' },
-                { val: fmt(st.REB), label: 'REB', rankKey: 'REB' },
-                { val: fmt(st.AST), label: 'AST', rankKey: 'AST' },
-                { val: fmt(st.TOV), label: 'TOV', rankKey: 'TOV' },
+                { val: fmt(st.PTS),     label: 'PTS',  rankKey: 'PTS' },
+                { val: fmt(st.OPP_PTS), label: 'OPP',  rankKey: null },
+                { val: fmt(st.AST),     label: 'AST',  rankKey: 'AST' },
+                { val: fmt(st.TOV),     label: 'TOV',  rankKey: 'TOV' },
               ].map(({ val, label, rankKey }, i) => (
                 <View key={label} style={[s.bigStatBox, i > 0 && { borderLeftWidth: 1, borderLeftColor: '#2a2a2a' }]}>
                   <Text style={s.bigStatVal}>{val}</Text>
@@ -1308,6 +1308,7 @@ function StatsTab({ teamKey }: { teamKey: string }) {
           <View style={s.card}>
             <Text style={s.sectionLabel}>Defense & Other</Text>
             <View style={{ marginTop: 14 }}>
+              {st.OPP_PTS != null && <><View style={s.psRow}><Text style={s.psLabel}>Points Allowed</Text><Text style={s.psValue}>{fmt(st.OPP_PTS)}</Text></View><View style={s.divider} /></>}
               <View style={s.psRow}><Text style={s.psLabel}>Steals</Text><View style={{ flexDirection: 'row', alignItems: 'center' }}><Text style={s.psValue}>{fmt(st.STL)}</Text><RankBadge rank={ranks.STL} /></View></View>
               <View style={s.divider} />
               <View style={s.psRow}><Text style={s.psLabel}>Blocks</Text><View style={{ flexDirection: 'row', alignItems: 'center' }}><Text style={s.psValue}>{fmt(st.BLK)}</Text><RankBadge rank={ranks.BLK} /></View></View>

@@ -1590,7 +1590,7 @@ export async function getTeamSeasonStats(season, teamAbbr) {
   const isPast   = season < currentSeason();
   const cacheKey = `teamstats_espn_${appAbbr}_${season}`;
 
-  const [statsRes, regRankings, poRankings] = await Promise.allSettled([
+  const [statsRes, regRankings, poRankings, scheduleRes] = await Promise.allSettled([
     (async () => {
       const cached = readDisk(cacheKey);
       if (cached !== undefined) return cached;
@@ -1608,11 +1608,33 @@ export async function getTeamSeasonStats(season, teamAbbr) {
     })(),
     getLeagueTeamRankings(2, season),
     getLeagueTeamRankings(3, season),
+    getTeamSchedule(season, appAbbr),
   ]);
 
   const stats    = statsRes.status === 'fulfilled' ? statsRes.value : { regular: null, playoffs: null };
   const regRanks = regRankings.status === 'fulfilled' ? (regRankings.value[appAbbr] ?? {}) : {};
   const poRanks  = poRankings.status  === 'fulfilled' ? (poRankings.value[appAbbr]  ?? {}) : {};
+
+  // Compute points allowed per game from schedule
+  const FINAL_STATUSES = ['Final','F/OT','F/2OT','F/3OT'];
+  const games = scheduleRes.status === 'fulfilled' ? scheduleRes.value : [];
+  const regGames = games.filter(g => g.SeasonType === 1 && FINAL_STATUSES.includes(g.Status));
+  const poGames  = games.filter(g => g.SeasonType === 3 && FINAL_STATUSES.includes(g.Status));
+
+  const avgOppScore = (gs) => {
+    if (!gs.length) return null;
+    const total = gs.reduce((sum, g) => {
+      const opp = g.HomeTeam === appAbbr ? g.AwayTeamScore : g.HomeTeamScore;
+      return sum + (opp ?? 0);
+    }, 0);
+    return total / gs.length;
+  };
+
+  const regOpp = avgOppScore(regGames);
+  const poOpp  = avgOppScore(poGames);
+
+  if (stats.regular && regOpp !== null)  stats.regular.OPP_PTS  = regOpp;
+  if (stats.playoffs && poOpp !== null)  stats.playoffs.OPP_PTS = poOpp;
 
   return {
     regular:        stats.regular,
