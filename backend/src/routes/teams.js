@@ -75,8 +75,8 @@ router.get('/:team/player-stats/:season', async (req, res) => {
 
     const playerStats = players.map(p => {
       if (isPast) {
-        // Pull from career stats — find the matching season year
-        const careerSeasons = readDisk(`career_seasons_${p.PlayerID}`);
+        // allowStale: past season data never changes, expired cache is still valid
+        const careerSeasons = readDisk(`career_seasons_${p.PlayerID}`, { allowStale: true });
         const stats = careerSeasons?.find(s => s.SeasonYear === season) ?? null;
         return { player: p, stats };
       } else {
