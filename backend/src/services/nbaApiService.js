@@ -1511,6 +1511,7 @@ function parseTeamStats(data, maxGP = Infinity) {
 
 export async function getAllLeagueTeamStats(season = null, seasonType = 2) {
   const seasonParam = parseInt(season ?? currentSeason());
+  const espnSeason = seasonParam + 1; // ESPN uses end-year: our 2025 (2025-26) = ESPN season 2026
   const isPast = seasonParam < currentSeason();
   const cacheKey = `league_team_stats_${seasonParam}_st${seasonType}`;
   const cached = readDisk(cacheKey, { allowStale: isPast });
@@ -1521,7 +1522,7 @@ export async function getAllLeagueTeamStats(season = null, seasonType = 2) {
       const slug = espnTeamSlug(abbr);
       const { data } = await espnClient.get(
         `/apis/site/v2/sports/basketball/nba/teams/${slug}/statistics`,
-        { params: { seasontype: seasonType, season: seasonParam } }
+        { params: { seasontype: seasonType, season: espnSeason } }
       );
       const maxGP = seasonType === 3 ? 28 : Infinity;
       return { abbr, stats: parseTeamStats(data, maxGP) };
@@ -1538,7 +1539,8 @@ export async function getAllLeagueTeamStats(season = null, seasonType = 2) {
 
 // Fetch all 30 teams, compute per-stat rankings (1=best), cache result
 async function getLeagueTeamRankings(seasonType = 2, season = null) {
-  const seasonParam = season ?? currentSeason();
+  const seasonParam = parseInt(season ?? currentSeason());
+  const espnSeason = seasonParam + 1; // ESPN uses end-year convention
   const isPast = seasonParam < currentSeason();
   const cacheKey = `league_team_rankings_${seasonParam}_st${seasonType}`;
   const cached = readDisk(cacheKey);
@@ -1549,7 +1551,7 @@ async function getLeagueTeamRankings(seasonType = 2, season = null) {
       const slug = espnTeamSlug(abbr);
       const { data } = await espnClient.get(
         `/apis/site/v2/sports/basketball/nba/teams/${slug}/statistics`,
-        { params: { seasontype: seasonType, season: seasonParam } }
+        { params: { seasontype: seasonType, season: espnSeason } }
       );
       const maxGP = seasonType === 3 ? 28 : Infinity;
       return { abbr, stats: parseTeamStats(data, maxGP) };
@@ -1592,9 +1594,10 @@ export async function getTeamSeasonStats(season, teamAbbr) {
     (async () => {
       const cached = readDisk(cacheKey);
       if (cached !== undefined) return cached;
+      const espnSeason = season + 1; // ESPN end-year convention
       const [regRes, poRes] = await Promise.allSettled([
-        espnClient.get(`/apis/site/v2/sports/basketball/nba/teams/${slug}/statistics`, { params: { seasontype: 2, season } }),
-        espnClient.get(`/apis/site/v2/sports/basketball/nba/teams/${slug}/statistics`, { params: { seasontype: 3, season } }),
+        espnClient.get(`/apis/site/v2/sports/basketball/nba/teams/${slug}/statistics`, { params: { seasontype: 2, season: espnSeason } }),
+        espnClient.get(`/apis/site/v2/sports/basketball/nba/teams/${slug}/statistics`, { params: { seasontype: 3, season: espnSeason } }),
       ]);
       const result = {
         regular:  regRes.status === 'fulfilled' ? parseTeamStats(regRes.value.data)     : null,
