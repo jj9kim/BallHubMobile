@@ -1562,22 +1562,25 @@ async function getLeagueTeamRankings(seasonType = 2, season = null) {
     .filter(r => r.status === 'fulfilled' && r.value.stats && r.value.stats.GP > 0)
     .map(r => r.value);
 
-  // Compute OPP_PTS for each team from cached schedules (pure disk reads)
-  const FINAL_STATUSES = ['Final','F/OT','F/2OT','F/3OT'];
-  const schedType = seasonType === 3 ? 3 : 1; // playoff or regular season games
-  for (const t of teams) {
+  // Compute OPP_PTS for each team from NBA.com leaguegamefinder (cached)
+  const nbaSeasonType = seasonType === 3 ? 'Playoffs' : 'Regular Season';
+  await Promise.allSettled(teams.map(async t => {
     try {
-      const schedule = await getTeamSchedule(seasonParam, t.abbr);
-      const gs = schedule.filter(g => g.SeasonType === schedType && FINAL_STATUSES.includes(g.Status));
-      if (gs.length) {
-        const total = gs.reduce((sum, g) => {
-          const opp = g.HomeTeam === t.abbr ? g.AwayTeamScore : g.HomeTeamScore;
-          return sum + (opp ?? 0);
-        }, 0);
-        t.stats.OPP_PTS = total / gs.length;
+      const oppCacheKey = `opp_pts_${t.abbr}_${seasonParam}_${nbaSeasonType}`;
+      const oppCached = readDisk(oppCacheKey, { allowStale: isPast });
+      if (oppCached !== undefined) { t.stats.OPP_PTS = oppCached; return; }
+      const data = await nbFetch('/stats/leaguegamefinder', {
+        PlayerOrTeam: 'T', TeamID: TEAM_IDS[t.abbr],
+        Season: toSeasonStr(seasonParam), SeasonType: nbaSeasonType, LeagueID: '00',
+      }, isPast ? TTL_FOREVER : TTL_SEASON, `gamefinder_${t.abbr}_${seasonParam}_${nbaSeasonType}`);
+      const rows = parseRS(data.resultSets, 'LeagueGameFinderResults');
+      if (rows.length) {
+        const avg = rows.reduce((sum, r) => sum + ((r.PTS ?? 0) - (r.PLUS_MINUS ?? 0)), 0) / rows.length;
+        t.stats.OPP_PTS = avg;
+        writeDisk(oppCacheKey, avg, isPast ? TTL_FOREVER : TTL_SEASON);
       }
     } catch {}
-  }
+  }));
 
   // For each stat, rank all teams (lower is better for TOV and OPP_PTS)
   const LOWER_IS_BETTER = new Set(['TOV', 'OPP_PTS']);
@@ -1608,7 +1611,26 @@ export async function getTeamSeasonStats(season, teamAbbr) {
   const isPast   = season < currentSeason();
   const cacheKey = `teamstats_espn_${appAbbr}_${season}`;
 
-  const [statsRes, regRankings, poRankings, scheduleRes] = await Promise.allSettled([
+  // Helper: compute avg opponent score from NBA.com leaguegamefinder
+  const fetchOppPts = async (seasonType) => {
+    const oppCacheKey = `opp_pts_${appAbbr}_${season}_${seasonType}`;
+    const oppCached = readDisk(oppCacheKey, { allowStale: isPast });
+    if (oppCached !== undefined) return oppCached;
+    try {
+      const data = await nbFetch('/stats/leaguegamefinder', {
+        PlayerOrTeam: 'T', TeamID: TEAM_IDS[appAbbr],
+        Season: toSeasonStr(season), SeasonType: seasonType, LeagueID: '00',
+      }, isPast ? TTL_FOREVER : TTL_SEASON, `gamefinder_${appAbbr}_${season}_${seasonType}`);
+      const rows = parseRS(data.resultSets, 'LeagueGameFinderResults');
+      if (!rows.length) return null;
+      const total = rows.reduce((sum, r) => sum + ((r.PTS ?? 0) - (r.PLUS_MINUS ?? 0)), 0);
+      const avg = total / rows.length;
+      writeDisk(oppCacheKey, avg, isPast ? TTL_FOREVER : TTL_SEASON);
+      return avg;
+    } catch { return null; }
+  };
+
+  const [statsRes, regRankings, poRankings, regOpp, poOpp] = await Promise.allSettled([
     (async () => {
       const cached = readDisk(cacheKey);
       if (cached !== undefined) return cached;
@@ -1626,33 +1648,19 @@ export async function getTeamSeasonStats(season, teamAbbr) {
     })(),
     getLeagueTeamRankings(2, season),
     getLeagueTeamRankings(3, season),
-    getTeamSchedule(season, appAbbr),
+    fetchOppPts('Regular Season'),
+    fetchOppPts('Playoffs'),
   ]);
 
   const stats    = statsRes.status === 'fulfilled' ? statsRes.value : { regular: null, playoffs: null };
   const regRanks = regRankings.status === 'fulfilled' ? (regRankings.value[appAbbr] ?? {}) : {};
   const poRanks  = poRankings.status  === 'fulfilled' ? (poRankings.value[appAbbr]  ?? {}) : {};
 
-  // Compute points allowed per game from schedule
-  const FINAL_STATUSES = ['Final','F/OT','F/2OT','F/3OT'];
-  const games = scheduleRes.status === 'fulfilled' ? scheduleRes.value : [];
-  const regGames = games.filter(g => g.SeasonType === 1 && FINAL_STATUSES.includes(g.Status));
-  const poGames  = games.filter(g => g.SeasonType === 3 && FINAL_STATUSES.includes(g.Status));
+  const regOppVal = regOpp.status === 'fulfilled' ? regOpp.value : null;
+  const poOppVal  = poOpp.status  === 'fulfilled' ? poOpp.value  : null;
 
-  const avgOppScore = (gs) => {
-    if (!gs.length) return null;
-    const total = gs.reduce((sum, g) => {
-      const opp = g.HomeTeam === appAbbr ? g.AwayTeamScore : g.HomeTeamScore;
-      return sum + (opp ?? 0);
-    }, 0);
-    return total / gs.length;
-  };
-
-  const regOpp = avgOppScore(regGames);
-  const poOpp  = avgOppScore(poGames);
-
-  if (stats.regular && regOpp !== null)  stats.regular.OPP_PTS  = regOpp;
-  if (stats.playoffs && poOpp !== null)  stats.playoffs.OPP_PTS = poOpp;
+  if (stats.regular && regOppVal !== null)  stats.regular.OPP_PTS  = regOppVal;
+  if (stats.playoffs && poOppVal !== null)  stats.playoffs.OPP_PTS = poOppVal;
 
   return {
     regular:        stats.regular,
