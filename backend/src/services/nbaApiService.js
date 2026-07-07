@@ -219,7 +219,7 @@ const ESPN_TO_APP = {
 };
 function espnToApp(abbr) { return ESPN_TO_APP[abbr] ?? abbr ?? ''; }
 
-async function getEspnGamesByDate(date) {
+export async function getEspnGamesByDate(date) {
   const espnDate = date.replace(/-/g, '');
   const cacheKey = `espn_scoreboard_${date}`;
   const isPast = new Date(date) < new Date(new Date().toDateString());
