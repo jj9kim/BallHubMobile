@@ -1489,9 +1489,9 @@ const s = StyleSheet.create({
   toggleBtnText:      { color: '#777', fontSize: 11, fontWeight: '600' },
   toggleBtnTextActive:{ color: '#000', fontWeight: '700' },
 
-  bigStatBox:     { flex: 1, alignItems: 'center', paddingVertical: 12 },
-  bigStatVal:     { color: '#fff', fontSize: 26, fontWeight: '800' },
-  bigStatLbl:     { color: '#555', fontSize: 11, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 2 },
+  bigStatBox:     { flex: 1, alignItems: 'center', paddingVertical: 12, paddingHorizontal: 2 },
+  bigStatVal:     { color: '#fff', fontSize: 20, fontWeight: '800' },
+  bigStatLbl:     { color: '#555', fontSize: 10, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.3, marginTop: 2 },
 
   psRow:          { flexDirection: 'row', alignItems: 'center', paddingVertical: 10 },
   psLabel:        { flex: 1, color: '#aaa', fontSize: 14, fontWeight: '500' },
