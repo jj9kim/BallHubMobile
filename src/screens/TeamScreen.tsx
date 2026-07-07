@@ -1170,6 +1170,7 @@ function StatsTab({ teamKey }: { teamKey: string }) {
   const [loadingRoster, setLoadingRoster] = useState(true);
   const [view,        setView]          = useState<'regular' | 'playoffs'>('regular');
   const [viewAllStat, setViewAllStat] = useState<{ key: SortKey; label: string; players: { player: any; stats: any }[]; fmtVal: (v: number) => string; getValue: (st: any) => number } | null>(null);
+  const [showSeasonPicker, setShowSeasonPicker] = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -1200,20 +1201,43 @@ function StatsTab({ teamKey }: { teamKey: string }) {
 
   return (
     <ScrollView contentContainerStyle={{ paddingHorizontal: 12, paddingTop: 12, paddingBottom: 40, gap: 10 }}>
-      {/* Season selector */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 4 }}>
-        {SEASONS.map(s => (
-          <TouchableOpacity
-            key={s}
-            onPress={() => setSelectedSeason(s)}
-            style={{ paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20, backgroundColor: selectedSeason === s ? '#6ee7b7' : '#1e1e1e', borderWidth: 1, borderColor: selectedSeason === s ? '#6ee7b7' : '#333' }}
-          >
-            <Text style={{ color: selectedSeason === s ? '#000' : '#aaa', fontWeight: '600', fontSize: 13 }}>
-              {s}-{String(s + 1).slice(2)}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
+      {/* Season picker button */}
+      <TouchableOpacity
+        onPress={() => setShowSeasonPicker(true)}
+        style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#1e1e1e', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, borderWidth: 1, borderColor: '#2a2a2a' }}
+      >
+        <Text style={{ color: '#aaa', fontSize: 12, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 }}>Season</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <Text style={{ color: '#fff', fontSize: 15, fontWeight: '700' }}>{selectedSeason}-{String(selectedSeason + 1).slice(2)}</Text>
+          <Text style={{ color: '#6ee7b7', fontSize: 12 }}>▼</Text>
+        </View>
+      </TouchableOpacity>
+
+      {/* Season picker modal */}
+      <Modal visible={showSeasonPicker} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowSeasonPicker(false)}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: '#141414' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#2a2a2a' }}>
+            <Text style={{ color: '#fff', fontSize: 18, fontWeight: '700', flex: 1 }}>Select Season</Text>
+            <TouchableOpacity onPress={() => setShowSeasonPicker(false)} style={{ padding: 8 }}>
+              <Text style={{ color: '#6ee7b7', fontSize: 16, fontWeight: '600' }}>Done</Text>
+            </TouchableOpacity>
+          </View>
+          <ScrollView contentContainerStyle={{ paddingVertical: 8 }}>
+            {SEASONS.map((yr, i) => (
+              <TouchableOpacity
+                key={yr}
+                onPress={() => { setSelectedSeason(yr); setShowSeasonPicker(false); }}
+                style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: '#1e1e1e' }}
+              >
+                <Text style={{ color: selectedSeason === yr ? '#6ee7b7' : '#fff', fontSize: 16, fontWeight: selectedSeason === yr ? '700' : '400' }}>
+                  {yr}-{String(yr + 1).slice(2)}
+                </Text>
+                {selectedSeason === yr && <Text style={{ color: '#6ee7b7', fontSize: 16 }}>✓</Text>}
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
 
       {/* Toggle */}
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
