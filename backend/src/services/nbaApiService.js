@@ -1575,9 +1575,9 @@ async function getLeagueTeamRankings(seasonType = 2, season = null) {
     .filter(r => r.status === 'fulfilled' && r.value.stats && r.value.stats.GP > 0)
     .map(r => r.value);
 
-  // Compute OPP_PTS for each team from NBA.com leaguegamefinder (cached)
+  // Compute OPP_PTS for each team — sequential for past seasons to avoid rate limits
   const nbaSeasonType = seasonType === 3 ? 'Playoffs' : 'Regular Season';
-  await Promise.allSettled(teams.map(async t => {
+  const fetchOppForTeam = async (t) => {
     try {
       const oppCacheKey = `opp_pts_${t.abbr}_${seasonParam}_${nbaSeasonType}`;
       const oppCached = readDisk(oppCacheKey, { allowStale: isPast });
@@ -1593,7 +1593,18 @@ async function getLeagueTeamRankings(seasonType = 2, season = null) {
         writeDisk(oppCacheKey, avg, isPast ? TTL_FOREVER : TTL_SEASON);
       }
     } catch {}
-  }));
+  };
+
+  if (isPast) {
+    // Sequential for past seasons — avoids NBA.com rate limiting, results cached forever
+    for (const t of teams) {
+      await fetchOppForTeam(t);
+      await new Promise(r => setTimeout(r, 300));
+    }
+  } else {
+    // Parallel for current season — faster, already partially cached
+    await Promise.allSettled(teams.map(fetchOppForTeam));
+  }
 
   // For each stat, rank all teams (lower is better for TOV and OPP_PTS)
   const LOWER_IS_BETTER = new Set(['TOV', 'OPP_PTS']);
