@@ -473,9 +473,9 @@ const s = StyleSheet.create({
   empty:            { color: '#555', fontSize: 15 },
 
   // Tab bar
-  tabBar:           { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: '#2a2a2a', backgroundColor: '#141414' },
+  tabBar:           { flexDirection: 'row', justifyContent: 'space-evenly', borderBottomWidth: 1, borderBottomColor: '#2a2a2a', backgroundColor: '#141414' },
   tabBtn:           { flex: 1, alignItems: 'center', paddingVertical: 12 },
-  tabLabel:         { color: '#555', fontSize: 13, fontWeight: '600' },
+  tabLabel:         { color: '#555', fontSize: 12, fontWeight: '600' },
   tabLabelActive:   { color: '#fff' },
   tabUnderline:     { position: 'absolute', bottom: 0, left: '20%', right: '20%', height: 2, backgroundColor: '#fff', borderRadius: 1 },
 
