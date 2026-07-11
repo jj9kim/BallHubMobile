@@ -1,6 +1,5 @@
 import { Router } from 'express';
-import { getAllTeams, getTeamRoster, getHistoricalRoster, getTeamSchedule, getDraftClass, getTeamSalaries, getTeamSeasonStats, getAllLeagueTeamStats, getPlayerSeasonStats, getPlayerCareerStats, getPlayerById, existsDisk, readDisk, CACHE_DIR, ESPN_TEAM_ALIASES } from '../services/nbaApiService.js';
-import { readdirSync } from 'fs';
+import { getAllTeams, getTeamRoster, getHistoricalRoster, getTeamSchedule, getDraftClass, getTeamSalaries, getTeamSeasonStats, getAllLeagueTeamStats, getPlayerSeasonStats, getPlayerCareerStats, existsDisk, readDisk, ESPN_TEAM_ALIASES } from '../services/nbaApiService.js';
 
 const CURRENT_SEASON = (() => { const n = new Date(); return n.getMonth() + 1 >= 10 ? n.getFullYear() : n.getFullYear() - 1; })();
 
@@ -79,29 +78,6 @@ router.get('/:team/player-stats/:season', async (req, res) => {
     let players;
     if (isPast) {
       players = await getHistoricalRoster(team, season);
-
-      // Also scan career stats cache to find players who were traded away mid-season
-      // (commonteamroster only returns players at end of season)
-      const officialIds = new Set(players.map(p => p.PlayerID));
-      const careerFiles = readdirSync(CACHE_DIR).filter(f => f.startsWith('career_seasons_') && f.endsWith('.json'));
-
-      for (const fname of careerFiles) {
-        const pid = parseInt(fname.replace('career_seasons_', '').replace('.json', ''));
-        if (officialIds.has(pid)) continue;
-
-        const careerData = readDisk(`career_seasons_${pid}`, { allowStale: true });
-        if (!Array.isArray(careerData)) continue;
-
-        // Check if this player has a team-specific row for this team+season
-        const teamRow = careerData.find(s => s.SeasonYear === season + 1 && s.Team === team);
-        if (!teamRow) continue;
-
-        // Player played for this team — get their bio (usually already cached)
-        try {
-          const bio = await getPlayerById(pid);
-          if (bio) players.push({ ...bio, Team: team });
-        } catch {}
-      }
     } else {
       const roster = await getTeamRoster(team);
       players = Array.isArray(roster) ? roster : (roster.players ?? []);
