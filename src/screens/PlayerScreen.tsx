@@ -209,8 +209,8 @@ function CareerStatsCard({ career }: { career: any[] }) {
               <CareerStatCols row={tot} />
             </TouchableOpacity>
 
-            {/* Expanded team rows */}
-            {isOpen && teams.map((teamRow, ti) => (
+            {/* Expanded team rows — most recent team first */}
+            {isOpen && [...teams].reverse().map((teamRow, ti) => (
               <View key={`${year}-${teamRow.Team}-${ti}`}
                 style={[s.careerRow, { borderTopWidth: 1, borderTopColor: '#1e1e1e', paddingLeft: 6, backgroundColor: '#181818' }]}>
                 <View style={s.careerSeasonCell}>
