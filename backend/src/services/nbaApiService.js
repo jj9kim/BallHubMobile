@@ -1537,13 +1537,39 @@ export async function getAllLeagueTeamStats(season = null, seasonType = 2) {
     .filter(r => r.status === 'fulfilled' && r.value.stats && r.value.stats.GP > 0)
     .map(r => r.value);
 
-  // Add OPP_PTS from already-cached data only (no new network calls — avoids rate limiting)
-  // Teams get their opp_pts cached when their profile is individually loaded
+  // Add OPP_PTS — read from cache if available, fetch sequentially for past seasons
   const nbaSeasonType = seasonType === 3 ? 'Playoffs' : 'Regular Season';
-  for (const t of teams) {
+  const fetchOpp = async (t) => {
     const oppCacheKey = `opp_pts_${t.abbr}_${seasonParam}_${nbaSeasonType}`;
     const oppCached = readDisk(oppCacheKey, { allowStale: true });
-    if (oppCached !== undefined) t.stats.OPP_PTS = oppCached;
+    if (oppCached !== undefined) { t.stats.OPP_PTS = oppCached; return; }
+    try {
+      const data = await nbFetch('/stats/leaguegamefinder', {
+        PlayerOrTeam: 'T', TeamID: TEAM_IDS[t.abbr],
+        Season: toSeasonStr(seasonParam), SeasonType: nbaSeasonType, LeagueID: '00',
+      }, TTL_FOREVER, `gamefinder_${t.abbr}_${seasonParam}_${nbaSeasonType}`);
+      const rows = parseRS(data.resultSets, 'LeagueGameFinderResults');
+      if (rows.length) {
+        const avg = rows.reduce((sum, r) => sum + ((r.PTS ?? 0) - (r.PLUS_MINUS ?? 0)), 0) / rows.length;
+        t.stats.OPP_PTS = avg;
+        writeDisk(oppCacheKey, avg, TTL_FOREVER);
+      }
+    } catch {}
+  };
+
+  if (isPast) {
+    // Sequential for past seasons — avoids rate limiting, cached forever
+    for (const t of teams) {
+      await fetchOpp(t);
+      await new Promise(r => setTimeout(r, 300));
+    }
+  } else {
+    // Current season — read from cache only (pre-warm handles the rest at startup)
+    for (const t of teams) {
+      const oppCacheKey = `opp_pts_${t.abbr}_${seasonParam}_${nbaSeasonType}`;
+      const oppCached = readDisk(oppCacheKey, { allowStale: true });
+      if (oppCached !== undefined) t.stats.OPP_PTS = oppCached;
+    }
   }
 
   writeDisk(cacheKey, teams, isPast ? TTL_FOREVER : TTL_SEASON);
