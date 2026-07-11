@@ -320,5 +320,26 @@ app.listen(PORT, async () => {
       console.log(`Historical ${season}-${String(season+1).slice(2)}: rosters cached`);
     }
     console.log(`✓ Historical pre-warm complete — ${hRosters} rosters, ${hPlayers} new career stat fetches`);
+
+    // ── OPP_PTS pre-warm for all past seasons ────────────────────────────────
+    // Fetches points-allowed for all 30 teams × 9 seasons × 2 types (reg + playoffs)
+    // Cached forever. Skips any already cached. Runs once, never again.
+    console.log('\n=== OPP_PTS Historical Pre-warm ===');
+    const OPP_SEASON_TYPES = ['Regular Season', 'Playoffs'];
+    let oppDone = 0, oppSkipped = 0;
+
+    for (const season of HIST_SEASONS) {
+      for (const seasonType of OPP_SEASON_TYPES) {
+        for (const team of HIST_TEAMS) {
+          const key = `opp_pts_${team}_${season}_${seasonType.replace(' ', '_')}`;
+          if (existsDisk(key)) { oppSkipped++; continue; }
+          await getTeamSeasonStats(season, team).catch(() => {});
+          oppDone++;
+          await new Promise(r => setTimeout(r, 300));
+        }
+      }
+      console.log(`OPP_PTS ${season}-${String(season+1).slice(2)}: done`);
+    }
+    console.log(`✓ OPP_PTS historical pre-warm complete — ${oppDone} fetched, ${oppSkipped} already cached`);
   })();
 });
