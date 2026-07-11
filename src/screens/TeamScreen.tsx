@@ -1309,7 +1309,7 @@ function StatsTab({ teamKey }: { teamKey: string }) {
           <View style={s.card}>
             <Text style={s.sectionLabel}>Defense & Other</Text>
             <View style={{ marginTop: 14 }}>
-              {st.OPP_PTS != null && <><View style={s.psRow}><Text style={s.psLabel}>Points Allowed</Text><Text style={s.psValue}>{fmt(st.OPP_PTS)}</Text></View><View style={s.divider} /></>}
+              {st.OPP_PTS != null && <><View style={s.psRow}><Text style={s.psLabel}>Points Allowed</Text><View style={{ flexDirection: 'row', alignItems: 'center' }}><Text style={s.psValue}>{fmt(st.OPP_PTS)}</Text><RankBadge rank={ranks.OPP_PTS} /></View></View><View style={s.divider} /></>}
               <View style={s.psRow}><Text style={s.psLabel}>Steals</Text><View style={{ flexDirection: 'row', alignItems: 'center' }}><Text style={s.psValue}>{fmt(st.STL)}</Text><RankBadge rank={ranks.STL} /></View></View>
               <View style={s.divider} />
               <View style={s.psRow}><Text style={s.psLabel}>Blocks</Text><View style={{ flexDirection: 'row', alignItems: 'center' }}><Text style={s.psValue}>{fmt(st.BLK)}</Text><RankBadge rank={ranks.BLK} /></View></View>
