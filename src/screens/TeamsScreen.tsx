@@ -426,6 +426,62 @@ function LeagueStatsTab() {
   );
 }
 
+// ── Playoffs Tab ──────────────────────────────────────────────────────────────
+
+// Play-in started in 2020-21 season (season param = 2020)
+const PLAYOFF_SEASONS = [2025,2024,2023,2022,2021,2020,2019,2018,2017,2016];
+
+function PlayoffsTab() {
+  const [season, setSeason]       = useState(2025);
+  const [showPicker, setShowPicker] = useState(false);
+
+  return (
+    <View style={{ flex: 1 }}>
+      {/* Season picker button */}
+      <View style={{ paddingHorizontal: 12, paddingVertical: 10 }}>
+        <TouchableOpacity
+          onPress={() => setShowPicker(true)}
+          style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#1e1e1e', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, borderWidth: 1, borderColor: '#2a2a2a', alignSelf: 'flex-start' }}
+        >
+          <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>{season}-{String(season+1).slice(2)}</Text>
+          <Text style={{ color: '#6ee7b7', fontSize: 11 }}>▼</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Season picker modal */}
+      <Modal visible={showPicker} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowPicker(false)}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: '#141414' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#2a2a2a' }}>
+            <Text style={{ color: '#fff', fontSize: 18, fontWeight: '700', flex: 1 }}>Select Season</Text>
+            <TouchableOpacity onPress={() => setShowPicker(false)} style={{ padding: 8 }}>
+              <Text style={{ color: '#6ee7b7', fontSize: 16, fontWeight: '600' }}>Done</Text>
+            </TouchableOpacity>
+          </View>
+          <ScrollView>
+            {PLAYOFF_SEASONS.map(yr => (
+              <TouchableOpacity
+                key={yr}
+                onPress={() => { setSeason(yr); setShowPicker(false); }}
+                style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: '#1e1e1e' }}
+              >
+                <View>
+                  <Text style={{ color: season === yr ? '#6ee7b7' : '#fff', fontSize: 16, fontWeight: season === yr ? '700' : '400' }}>
+                    {yr}-{String(yr+1).slice(2)}
+                  </Text>
+                  {yr < 2020 && <Text style={{ color: '#555', fontSize: 11, marginTop: 2 }}>No Play-In</Text>}
+                </View>
+                {season === yr && <Text style={{ color: '#6ee7b7' }}>✓</Text>}
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
+
+      <PlayoffBracket season={season} />
+    </View>
+  );
+}
+
 // ── Main Screen ───────────────────────────────────────────────────────────────
 
 export default function TeamsScreen() {
@@ -452,7 +508,7 @@ export default function TeamsScreen() {
         <View style={{ flex: 1 }}>
           {activeTab === 'Overview'  && <OverviewTab standings={standings} />}
           {activeTab === 'Matches'   && <MatchesTab  standings={standings} />}
-          {activeTab === 'Playoffs'  && <PlayoffBracket season={2025} />}
+          {activeTab === 'Playoffs'  && <PlayoffsTab />}
           {activeTab === 'Stats'     && <LeagueStatsTab />}
           {activeTab === 'Draft'     && <DraftTab />}
         </View>
