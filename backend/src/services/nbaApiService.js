@@ -825,7 +825,7 @@ export async function getSchedule(season) {
     startDate = '2021-05-18';
     endDate   = isCurrentSeason ? new Date().toISOString().split('T')[0] : '2021-07-25';
   } else {
-    startDate = `${season + 1}-04-12`;
+    startDate = `${season + 1}-04-11`; // play-in can start Apr 11
     endDate   = isCurrentSeason
       ? new Date().toISOString().split('T')[0]
       : `${season + 1}-06-30`; // extended to Jun 30 to catch late Finals

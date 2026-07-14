@@ -44,12 +44,12 @@ app.listen(PORT, async () => {
 
     // Pre-warm playoff scoreboard dates for all seasons
     const PLAYOFF_DATE_RANGES = [
-      { start: `${_season + 1}-04-12`, end: `${_season + 1}-06-30` }, // current season
+      { start: `${_season + 1}-04-11`, end: `${_season + 1}-06-30` }, // current season
       { start: '2020-08-17', end: '2020-10-12' },  // 2019-20 bubble
       { start: '2021-05-18', end: '2021-07-25' },  // 2020-21 extended
-      { start: '2022-04-12', end: '2022-06-30' },
-      { start: '2023-04-12', end: '2023-06-30' },
-      { start: '2024-04-12', end: '2024-06-30' },
+      { start: '2022-04-11', end: '2022-06-30' },
+      { start: '2023-04-11', end: '2023-06-30' },
+      { start: '2024-04-11', end: '2024-06-30' },
     ];
     let totalFetched = 0;
     for (const { start, end } of PLAYOFF_DATE_RANGES) {
