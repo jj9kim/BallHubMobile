@@ -2259,8 +2259,15 @@ export async function getPlayoffBracket(season = currentSeason()) {
   const seedMap = {};
   const east = standingsData.filter(t => t.Conference === 'East').sort((a, b) => b.Percentage - a.Percentage);
   const west = standingsData.filter(t => t.Conference === 'West').sort((a, b) => b.Percentage - a.Percentage);
-  east.forEach((t, i) => { seedMap[t.Key] = i + 1; seedMap[toAppAbbr(t.Key)] = i + 1; });
-  west.forEach((t, i) => { seedMap[t.Key] = i + 1; seedMap[toAppAbbr(t.Key)] = i + 1; });
+  // Alias map: some teams appear differently in game data vs standings
+  const SEED_ALIASES = { NOP: ['NO','NOP'], GSW: ['GS','GSW'], UTA: ['UTAH','UTA'], WAS: ['WSH','WAS'], NY: ['NY','NYK'] };
+  const addSeed = (key, seed) => {
+    seedMap[key] = seed;
+    seedMap[toAppAbbr(key)] = seed;
+    (SEED_ALIASES[key] ?? []).forEach(a => { seedMap[a] = seed; });
+  };
+  east.forEach((t, i) => addSeed(t.Key, i + 1));
+  west.forEach((t, i) => addSeed(t.Key, i + 1));
 
   const seriesMap = {};
   for (const g of playoffGames) {
