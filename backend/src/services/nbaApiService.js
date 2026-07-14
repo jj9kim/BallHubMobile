@@ -813,11 +813,23 @@ export async function getSchedule(season) {
   // ESPN is authoritative; NBA API has been returning stale/wrong data.
   const isCurrentSeason = season === currentSeason();
 
-  // Playoff window: late April → mid-June
-  const startDate = `${season + 1}-04-12`;
-  const endDate   = isCurrentSeason
-    ? new Date().toISOString().split('T')[0]
-    : `${season + 1}-06-22`;
+  // Playoff window — varies by season:
+  // 2019-20: COVID bubble, Aug 17–Oct 11 2020
+  // 2020-21: Extended season, playoffs ran May–Jul 2021
+  // All other seasons: Apr–Jun of following year
+  let startDate, endDate;
+  if (season === 2019) {
+    startDate = '2020-08-17';
+    endDate   = isCurrentSeason ? new Date().toISOString().split('T')[0] : '2020-10-12';
+  } else if (season === 2020) {
+    startDate = '2021-05-18';
+    endDate   = isCurrentSeason ? new Date().toISOString().split('T')[0] : '2021-07-25';
+  } else {
+    startDate = `${season + 1}-04-12`;
+    endDate   = isCurrentSeason
+      ? new Date().toISOString().split('T')[0]
+      : `${season + 1}-06-30`; // extended to Jun 30 to catch late Finals
+  }
 
   const allDates = dateRange(startDate, endDate);
 

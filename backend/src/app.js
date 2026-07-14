@@ -42,26 +42,29 @@ app.listen(PORT, async () => {
   ]).then(async () => {
     console.log('Cache warmed: standings + schedule + all rosters');
 
-    // Pre-warm playoff scoreboard dates (Apr 12 – Jun 22) if not yet cached
-    const playoffStart = new Date(`${_season + 1}-04-12`);
-    const playoffEnd   = new Date(`${_season + 1}-06-22`);
-    const missingDates = [];
-    for (let d = new Date(playoffStart); d <= playoffEnd; d.setDate(d.getDate() + 1)) {
-      const ymd = d.toISOString().split('T')[0];
-      if (!existsDisk(`espn_scoreboard_${ymd}`)) missingDates.push(ymd);
-    }
-    if (missingDates.length > 0) {
-      console.log(`Fetching ${missingDates.length} uncached playoff scoreboard dates...`);
-      let fetched = 0;
-      for (const date of missingDates) {
-        await getEspnGamesByDate(date).catch(() => {});
-        fetched++;
-        await new Promise(r => setTimeout(r, 150));
+    // Pre-warm playoff scoreboard dates for all seasons
+    const PLAYOFF_DATE_RANGES = [
+      { start: `${_season + 1}-04-12`, end: `${_season + 1}-06-30` }, // current season
+      { start: '2020-08-17', end: '2020-10-12' },  // 2019-20 bubble
+      { start: '2021-05-18', end: '2021-07-25' },  // 2020-21 extended
+      { start: '2022-04-12', end: '2022-06-30' },
+      { start: '2023-04-12', end: '2023-06-30' },
+      { start: '2024-04-12', end: '2024-06-30' },
+    ];
+    let totalFetched = 0;
+    for (const { start, end } of PLAYOFF_DATE_RANGES) {
+      const s = new Date(start), e = new Date(end);
+      for (let d = new Date(s); d <= e; d.setDate(d.getDate() + 1)) {
+        const ymd = d.toISOString().split('T')[0];
+        if (!existsDisk(`espn_scoreboard_${ymd}`)) {
+          await getEspnGamesByDate(ymd).catch(() => {});
+          totalFetched++;
+          await new Promise(r => setTimeout(r, 150));
+        }
       }
-      console.log(`✓ Playoff scoreboard: ${fetched} dates cached`);
-    } else {
-      console.log('✓ Playoff scoreboard dates already cached');
     }
+    if (totalFetched > 0) console.log(`✓ Playoff scoreboard: ${totalFetched} new dates cached`);
+    else console.log('✓ Playoff scoreboard dates already cached');
 
     // Pre-warm OPP_PTS for all 30 teams (sequential to avoid NBA.com rate limits)
     const OPP_TEAMS = [
