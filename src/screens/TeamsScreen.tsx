@@ -464,12 +464,9 @@ function PlayoffsTab() {
                 onPress={() => { setSeason(yr); setShowPicker(false); }}
                 style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: '#1e1e1e' }}
               >
-                <View>
-                  <Text style={{ color: season === yr ? '#6ee7b7' : '#fff', fontSize: 16, fontWeight: season === yr ? '700' : '400' }}>
-                    {yr}-{String(yr+1).slice(2)}
-                  </Text>
-                  {yr < 2020 && <Text style={{ color: '#555', fontSize: 11, marginTop: 2 }}>No Play-In</Text>}
-                </View>
+                <Text style={{ color: season === yr ? '#6ee7b7' : '#fff', fontSize: 16, fontWeight: season === yr ? '700' : '400' }}>
+                  {yr}-{String(yr+1).slice(2)}
+                </Text>
                 {season === yr && <Text style={{ color: '#6ee7b7' }}>✓</Text>}
               </TouchableOpacity>
             ))}
