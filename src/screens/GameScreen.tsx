@@ -940,9 +940,9 @@ const lineup = StyleSheet.create({
   ratingText:    { color: '#000', fontSize: 10, fontWeight: '800' },
   statCols:      { flexDirection: 'row' },
   statVal:       { width: 40, color: '#888', fontSize: 12, textAlign: 'center' },
-  photo:         { width: 38, height: 38, borderRadius: 19, overflow: 'hidden', borderWidth: 2 },
+  photo:         { width: 52, height: 52, borderRadius: 26, overflow: 'hidden', borderWidth: 2 },
   photoFallback: { width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center' },
-  photoInitials: { color: '#fff', fontSize: 11, fontWeight: '800' },
+  photoInitials: { color: '#fff', fontSize: 14, fontWeight: '800' },
   positionText:  { color: '#666', fontSize: 11, marginTop: 1 },
 });
 
