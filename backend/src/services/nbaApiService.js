@@ -1992,12 +1992,15 @@ export async function getDraftClass(year) {
         const a = p.athlete ?? {};
         const nameParts = (a.displayName ?? '').split(' ');
         const teamAbbr = teamById[String(p.teamId)] ?? '';
+        const firstName = nameParts[0] ?? '';
+        const lastName  = nameParts.slice(1).join(' ') ?? '';
         return {
           Overall:   p.overall ?? 0,
           Round:     p.round ?? 1,
           Pick:      p.pick ?? 0,
-          FirstName: nameParts[0] ?? '',
-          LastName:  nameParts.slice(1).join(' ') ?? '',
+          Name:      a.displayName ?? '',
+          FirstName: firstName,
+          LastName:  lastName,
           Team:      toAppAbbr(teamAbbr) || teamAbbr,
           College:   a.team?.location ?? a.team?.name ?? '',
           Position:  POSITION_MAP[a.position?.id] ?? '',
