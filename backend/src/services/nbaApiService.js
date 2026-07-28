@@ -1978,6 +1978,42 @@ export async function getDraftClass(year) {
     return cached;
   }
 
+  // Try site API first — fast single call, has all picks for completed drafts
+  try {
+    const { data: siteData } = await espnClient.get(
+      `/apis/site/v2/sports/basketball/nba/draft?year=${espnSeason}`
+    );
+    const sitePicks = siteData.picks ?? [];
+    const siteTeams = siteData.teams ?? [];
+    if (sitePicks.length > 0 && siteData.status?.state === 'post') {
+      const teamById = Object.fromEntries(siteTeams.map(t => [t.id, t.abbreviation ?? t.shortDisplayName]));
+      const POSITION_MAP = { '1':'PG','2':'SG','3':'SF','4':'PF','5':'C','6':'G','7':'F','8':'F-C','9':'G-F' };
+      const picks = sitePicks.map(p => {
+        const a = p.athlete ?? {};
+        const nameParts = (a.displayName ?? '').split(' ');
+        const teamAbbr = teamById[String(p.teamId)] ?? '';
+        return {
+          Overall:   p.overall ?? 0,
+          Round:     p.round ?? 1,
+          Pick:      p.pick ?? 0,
+          FirstName: nameParts[0] ?? '',
+          LastName:  nameParts.slice(1).join(' ') ?? '',
+          Team:      toAppAbbr(teamAbbr) || teamAbbr,
+          College:   a.team?.location ?? a.team?.name ?? '',
+          Position:  POSITION_MAP[a.position?.id] ?? '',
+          Height:    a.displayHeight ?? '',
+          Weight:    parseInt(a.displayWeight) || 0,
+          EspnId:    a.id ?? null,
+          NbaId:     a.alternativeId ? parseInt(a.alternativeId) : null,
+          PhotoUrl:  a.headshot?.href ?? null,
+          Stats:     null,
+        };
+      }).sort((a, b) => a.Overall - b.Overall);
+      writeDisk(cacheKey, picks, 86400 * 365);
+      return picks;
+    }
+  } catch {}
+
   const coreClient = axios.create({ baseURL: 'https://sports.core.api.espn.com', timeout: 12000 });
 
   // Step 1: get all athlete $refs — paginate (cap at 5 pages; some years have anomalous counts)
