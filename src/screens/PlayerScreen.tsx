@@ -245,11 +245,8 @@ export default function PlayerScreen({ route }: Props) {
   useEffect(() => {
     const safe = <T,>(p: Promise<T>): Promise<T | null> => p.catch(() => null);
 
-    // Fast path: bio + career — these are always cached, loads in <100ms
-    Promise.all([
-      safe(NBAService.getPlayerById(playerId)),
-      safe(NBAService.getPlayerCareerStats(playerId)),
-    ]).then(([pRes, careerRes]) => {
+    // Step 1: bio only — show screen immediately, no waiting for career stats
+    safe(NBAService.getPlayerById(playerId)).then(pRes => {
       if (pRes?.player) {
         setPlayer(pRes.player);
       } else if (fallback) {
@@ -265,8 +262,12 @@ export default function PlayerScreen({ route }: Props) {
           Status: 'Active',
         } as any);
       }
-      setCareer(careerRes?.seasons ?? []);
     }).catch(() => {}).finally(() => setLoading(false));
+
+    // Step 2: career stats — load independently, updates when ready
+    safe(NBAService.getPlayerCareerStats(playerId))
+      .then(careerRes => setCareer(careerRes?.seasons ?? []))
+      .catch(() => {});
 
     // Slow path: season stats (may need NBA.com game log fetch) — independent spinner
     Promise.all([
