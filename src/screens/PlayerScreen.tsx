@@ -250,7 +250,21 @@ export default function PlayerScreen({ route }: Props) {
       safe(NBAService.getPlayerById(playerId)),
       safe(NBAService.getPlayerCareerStats(playerId)),
     ]).then(([pRes, careerRes]) => {
-      if (pRes?.player) setPlayer(pRes.player);
+      if (pRes?.player) {
+        setPlayer(pRes.player);
+      } else if (fallback) {
+        // Use fallback data (e.g. draft picks not yet in NBA.com database)
+        const nameParts = fallback.name?.split(' ') ?? [];
+        setPlayer({
+          PlayerID: playerId,
+          FirstName: nameParts[0] ?? '',
+          LastName: nameParts.slice(1).join(' ') ?? '',
+          Team: fallback.team ?? '',
+          Position: fallback.position ?? '',
+          PhotoUrl: fallback.photoUrl ?? null,
+          Status: 'Active',
+        } as any);
+      }
       setCareer(careerRes?.seasons ?? []);
     }).catch(() => {}).finally(() => setLoading(false));
 
