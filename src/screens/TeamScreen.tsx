@@ -291,7 +291,7 @@ function OverviewTab({ teamKey, standing, allStandings }: {
                   activeOpacity={0.7}
                 >
                   <TeamLogo abbrev={opp} size={32} />
-                  <View style={[s.wlDot, { backgroundColor: won ? '#fff' : '#333' }]} />
+                  <View style={[s.wlDot, { backgroundColor: won ? '#fff' : '#555' }]} />
                   <Text style={s.formScore}>{myScore}–{oppScore}</Text>
                 </TouchableOpacity>
               );
@@ -404,8 +404,8 @@ function OverviewTab({ teamKey, standing, allStandings }: {
                   <View style={s.psRow}>
                     <Text style={s.psLabel}>Streak</Text>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: isWStreak ? '#fff' : '#333' }} />
-                      <Text style={s.psValue}>{streak?.replace(/^[WL]/, '')}</Text>
+                      <View style={{ width: 9, height: 9, borderRadius: 5, backgroundColor: isWStreak ? '#fff' : '#555' }} />
+                      <Text style={[s.psValue, { color: isWStreak ? '#fff' : '#aaa' }]}>{streak?.replace(/^[WL]/, '')}</Text>
                     </View>
                   </View>
                 </>
@@ -1475,7 +1475,7 @@ const s = StyleSheet.create({
   loserText:      { color: '#555' },
 
   // ── team form ────────────────────────────────────────────────────────────────
-  wlDot:          { width: 10, height: 10, borderRadius: 5 },
+  wlDot:          { width: 12, height: 12, borderRadius: 6 },
   formScore:      { color: '#555', fontSize: 10, fontWeight: '500' },
 
   // ── next match ───────────────────────────────────────────────────────────────
