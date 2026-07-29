@@ -291,9 +291,7 @@ function OverviewTab({ teamKey, standing, allStandings }: {
                   activeOpacity={0.7}
                 >
                   <TeamLogo abbrev={opp} size={32} />
-                  <View style={[s.wlDot, { backgroundColor: won ? '#fff' : '#2a2a2a' }]}>
-                    <Text style={{ fontSize: 9, fontWeight: '700', color: won ? '#000' : '#555' }}>{won ? 'W' : 'L'}</Text>
-                  </View>
+                  <View style={[s.wlDot, { backgroundColor: won ? '#fff' : '#333' }]} />
                   <Text style={s.formScore}>{myScore}–{oppScore}</Text>
                 </TouchableOpacity>
               );
@@ -1474,7 +1472,7 @@ const s = StyleSheet.create({
   loserText:      { color: '#555' },
 
   // ── team form ────────────────────────────────────────────────────────────────
-  wlDot:          { width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  wlDot:          { width: 10, height: 10, borderRadius: 5 },
   formScore:      { color: '#555', fontSize: 10, fontWeight: '500' },
 
   // ── next match ───────────────────────────────────────────────────────────────
