@@ -403,7 +403,10 @@ function OverviewTab({ teamKey, standing, allStandings }: {
                   <View style={s.divider} />
                   <View style={s.psRow}>
                     <Text style={s.psLabel}>Streak</Text>
-                    <Text style={[s.psValue, { color: isWStreak ? '#4caf50' : '#e05a5a' }]}>{streak}</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: isWStreak ? '#fff' : '#333' }} />
+                      <Text style={s.psValue}>{streak?.replace(/^[WL]/, '')}</Text>
+                    </View>
                   </View>
                 </>
               )}
