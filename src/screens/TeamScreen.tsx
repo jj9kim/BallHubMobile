@@ -291,8 +291,8 @@ function OverviewTab({ teamKey, standing, allStandings }: {
                   activeOpacity={0.7}
                 >
                   <TeamLogo abbrev={opp} size={32} />
-                  <View style={[s.wlDot, { backgroundColor: won ? '#1a3a1a' : '#3a1a1a', borderColor: won ? '#4caf50' : '#e05a5a' }]}>
-                    <Text style={[{ fontSize: 10, fontWeight: '800' }, won ? s.winnerText : s.loserText]}>{won ? 'W' : 'L'}</Text>
+                  <View style={[s.wlDot, { backgroundColor: won ? '#fff' : '#2a2a2a' }]}>
+                    <Text style={{ fontSize: 9, fontWeight: '700', color: won ? '#000' : '#555' }}>{won ? 'W' : 'L'}</Text>
                   </View>
                   <Text style={s.formScore}>{myScore}–{oppScore}</Text>
                 </TouchableOpacity>
@@ -454,7 +454,7 @@ function OverviewTab({ teamKey, standing, allStandings }: {
               <Text style={[s.standStat, isMe && { color: '#fff' }]}>{t.Losses}</Text>
               <Text style={[s.standStat, isMe && { color: '#fff' }]}>{t.Percentage.toFixed(3)}</Text>
               <Text style={[s.standStat, isMe && { color: '#fff' }]}>{gb}</Text>
-              <Text style={[s.standStat, streak.startsWith('W') ? s.winnerText : s.loserText]}>{streak}</Text>
+              <Text style={[s.standStat, { color: streak.startsWith('W') ? '#fff' : '#555' }]}>{streak}</Text>
             </View>
           );
         })}
@@ -1474,7 +1474,7 @@ const s = StyleSheet.create({
   loserText:      { color: '#555' },
 
   // ── team form ────────────────────────────────────────────────────────────────
-  wlDot:          { width: 22, height: 22, borderRadius: 11, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
+  wlDot:          { width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   formScore:      { color: '#555', fontSize: 10, fontWeight: '500' },
 
   // ── next match ───────────────────────────────────────────────────────────────
