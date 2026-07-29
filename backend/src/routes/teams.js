@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getAllTeams, getTeamRoster, getHistoricalRoster, getTeamSchedule, getDraftClass, getTeamSalaries, getTeamSeasonStats, getAllLeagueTeamStats, getPlayerSeasonStats, getPlayerCareerStats, existsDisk, readDisk, ESPN_TEAM_ALIASES } from '../services/nbaApiService.js';
+import { getAllTeams, getTeamRoster, getHistoricalRoster, getTeamSchedule, getDraftClass, getTeamSalaries, getTeamSeasonStats, getAllLeagueTeamStats, getPlayerSeasonStats, getPlayerCareerStats, getPlayerPlayoffStats, getPlayerPlayoffStatsFromCache, existsDisk, readDisk, ESPN_TEAM_ALIASES } from '../services/nbaApiService.js';
 
 const CURRENT_SEASON = (() => { const n = new Date(); return n.getMonth() + 1 >= 10 ? n.getFullYear() : n.getFullYear() - 1; })();
 
@@ -70,9 +70,10 @@ router.get('/:team/stats/:season', async (req, res) => {
 // GET /api/teams/:team/player-stats/:season
 router.get('/:team/player-stats/:season', async (req, res) => {
   try {
-    const team   = req.params.team.toUpperCase();
-    const season = parseInt(req.params.season);
-    const isPast = season < CURRENT_SEASON;
+    const team       = req.params.team.toUpperCase();
+    const season     = parseInt(req.params.season);
+    const isPast     = season < CURRENT_SEASON;
+    const isPlayoffs = req.query.type === 'playoffs';
 
     // Use historical roster for past seasons, current roster for current season
     let players;
@@ -81,6 +82,16 @@ router.get('/:team/player-stats/:season', async (req, res) => {
     } else {
       const roster = await getTeamRoster(team);
       players = Array.isArray(roster) ? roster : (roster.players ?? []);
+    }
+
+    if (isPlayoffs) {
+      // Small roster (~15 players) — cache-first, live fetch fallback is cheap here
+      const playerStats = await Promise.all(players.map(async p => {
+        const stats = getPlayerPlayoffStatsFromCache(p.PlayerID, season)
+          ?? await getPlayerPlayoffStats(season, p.PlayerID).catch(() => null);
+        return { player: p, stats };
+      }));
+      return res.json({ success: true, players: playerStats });
     }
 
     const playerStats = players.map(p => {

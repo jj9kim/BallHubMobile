@@ -6,7 +6,7 @@ import gamesRouter from './routes/games.js';
 import standingsRouter from './routes/standings.js';
 import teamsRouter from './routes/teams.js';
 import playersRouter from './routes/players.js';
-import { getStandings, getSchedule, getDraftClass, getAllHistoricalPlayers, getPlayerById, getPlayerCareerStats, getPlayerGameLogs, getTeamRoster, getHistoricalRoster, getEspnGamesByDate, getTeamSeasonStats, existsDisk, getAllPlayerSeasonStats, getPlayerSeasonStats, writeDisk, CACHE_DIR } from './services/nbaApiService.js';
+import { getStandings, getSchedule, getDraftClass, getAllHistoricalPlayers, getPlayerById, getPlayerCareerStats, getPlayerGameLogs, getTeamRoster, getHistoricalRoster, getEspnGamesByDate, getTeamSeasonStats, existsDisk, readDisk, getAllPlayerSeasonStats, getPlayerSeasonStats, writeDisk, CACHE_DIR } from './services/nbaApiService.js';
 
 const app = express();
 const PORT = process.env.PORT ?? 5000;
@@ -30,6 +30,23 @@ app.listen(PORT, async () => {
   const _season = _now.getMonth() + 1 >= 10 ? _now.getFullYear() : _now.getFullYear() - 1;
   writeDisk(`seasonstats_all_${_season}`, null, 86400);
 
+  // Playoff date ranges per season (our convention — season N = N/N+1 season,
+  // playoffs happen in spring of N+1, except the 2019/2020 COVID seasons).
+  // Shared by the scoreboard pre-warm below and the playoff game-log pre-warm.
+  const PLAYOFF_DATE_RANGES = {
+    [_season]: { start: `${_season + 1}-04-11`, end: `${_season + 1}-06-30` }, // current season
+    2024: { start: '2025-04-11', end: '2025-06-30' },
+    2019: { start: '2020-08-17', end: '2020-10-12' },  // 2019-20 bubble
+    2020: { start: '2021-05-18', end: '2021-07-25' },  // 2020-21 extended
+    2021: { start: '2022-04-11', end: '2022-06-30' },
+    2022: { start: '2023-04-11', end: '2023-06-30' },
+    2023: { start: '2024-04-11', end: '2024-06-30' },
+    2015: { start: '2016-04-16', end: '2016-06-19' },
+    2016: { start: '2017-04-15', end: '2017-06-12' },
+    2017: { start: '2018-04-14', end: '2018-06-08' },
+    2018: { start: '2019-04-13', end: '2019-06-13' },
+  };
+
   // Pre-warm standings, schedule, and all 30 team rosters immediately
   const ALL_TEAMS = [
     'ATL','BOS','BKN','CHA','CHI','CLE','DAL','DEN','DET','GS',
@@ -42,17 +59,9 @@ app.listen(PORT, async () => {
   ]).then(async () => {
     console.log('Cache warmed: standings + schedule + all rosters');
 
-    // Pre-warm playoff scoreboard dates for all seasons
-    const PLAYOFF_DATE_RANGES = [
-      { start: `${_season + 1}-04-11`, end: `${_season + 1}-06-30` }, // current season
-      { start: '2020-08-17', end: '2020-10-12' },  // 2019-20 bubble
-      { start: '2021-05-18', end: '2021-07-25' },  // 2020-21 extended
-      { start: '2022-04-11', end: '2022-06-30' },
-      { start: '2023-04-11', end: '2023-06-30' },
-      { start: '2024-04-11', end: '2024-06-30' },
-    ];
+    // Pre-warm playoff scoreboard dates for all seasons.
     let totalFetched = 0;
-    for (const { start, end } of PLAYOFF_DATE_RANGES) {
+    for (const { start, end } of Object.values(PLAYOFF_DATE_RANGES)) {
       const s = new Date(start), e = new Date(end);
       for (let d = new Date(s); d <= e; d.setDate(d.getDate() + 1)) {
         const ymd = d.toISOString().split('T')[0];
@@ -65,6 +74,56 @@ app.listen(PORT, async () => {
     }
     if (totalFetched > 0) console.log(`✓ Playoff scoreboard: ${totalFetched} new dates cached`);
     else console.log('✓ Playoff scoreboard dates already cached');
+
+    // Pre-warm playoff game logs — only for teams that actually made the playoffs
+    // each season (discovered from the scoreboard dates just cached above), not the
+    // full league. Keeps this fast and avoids unnecessary NBA.com load. Skips anyone
+    // already cached, so restarts pick up where they left off.
+    console.log('\n=== Playoff Game Log Pre-warm ===');
+    let pgFetched = 0, pgSkipped = 0, pgFailed = 0;
+
+    for (const [seasonStr, { start, end }] of Object.entries(PLAYOFF_DATE_RANGES)) {
+      const pgSeason = parseInt(seasonStr);
+      const isCurrentSeason = pgSeason === _season;
+
+      // Discover which teams played playoff games this season from cached scoreboards
+      const playoffTeams = new Set();
+      const s = new Date(start), e = new Date(end);
+      for (let d = new Date(s); d <= e; d.setDate(d.getDate() + 1)) {
+        const ymd = d.toISOString().split('T')[0];
+        const games = readDisk(`espn_scoreboard_${ymd}`, { allowStale: true });
+        if (!Array.isArray(games)) continue;
+        for (const g of games) {
+          if (g.AwayTeam) playoffTeams.add(g.AwayTeam);
+          if (g.HomeTeam) playoffTeams.add(g.HomeTeam);
+        }
+      }
+      if (playoffTeams.size === 0) continue;
+
+      const rosters = await Promise.allSettled(
+        [...playoffTeams].map(t => isCurrentSeason ? getTeamRoster(t) : getHistoricalRoster(t, pgSeason))
+      );
+      const playoffPlayerIds = [...new Set(
+        rosters.flatMap(r => r.status === 'fulfilled'
+          ? (Array.isArray(r.value) ? r.value : r.value.players ?? []).map(p => p.PlayerID)
+          : [])
+      )].filter(Boolean);
+
+      const needed = playoffPlayerIds.filter(id => !existsDisk(`gamelogs_playoff_${id}_${pgSeason}`));
+      pgSkipped += playoffPlayerIds.length - needed.length;
+      if (needed.length === 0) {
+        console.log(`Playoff logs ${pgSeason}-${String(pgSeason + 1).slice(2)}: already cached (${playoffTeams.size} teams)`);
+        continue;
+      }
+      console.log(`Playoff logs ${pgSeason}-${String(pgSeason + 1).slice(2)}: fetching ${needed.length}/${playoffPlayerIds.length} players (${playoffTeams.size} teams)...`);
+
+      for (const id of needed) {
+        try { await getPlayerGameLogs(pgSeason, id); pgFetched++; }
+        catch { pgFailed++; }
+        await new Promise(r => setTimeout(r, 400));
+      }
+    }
+    console.log(`✓ Playoff game log pre-warm complete — ${pgFetched} fetched, ${pgSkipped} already cached, ${pgFailed} failed`);
 
     // Pre-warm OPP_PTS for all 30 teams (sequential to avoid NBA.com rate limits)
     const OPP_TEAMS = [

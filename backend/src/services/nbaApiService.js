@@ -1832,6 +1832,43 @@ export async function getPlayerPlayoffStats(season, playerId) {
   };
 }
 
+// Cache-only variant — reads the disk-cached playoff game log response directly,
+// no network call. Used for bulk (league-wide / team-wide) playoff leaderboards
+// where fetching hundreds of players live would be too slow.
+export function getPlayerPlayoffStatsFromCache(playerId, season) {
+  const raw = readDisk(`gamelogs_playoff_${playerId}_${season}`, { allowStale: true });
+  if (!raw) return null;
+  const rows = parseRS(raw.resultSets, 'PlayerGameLog');
+  if (!rows.length) return null;
+  const logs = rows.map(r => ({
+    Minutes: parseFloat(r.MIN) || 0,
+    Points: r.PTS ?? 0, Rebounds: r.REB ?? 0, Assists: r.AST ?? 0,
+    Steals: r.STL ?? 0, BlockedShots: r.BLK ?? 0, Turnovers: r.TOV ?? 0,
+    PersonalFouls: r.PF ?? 0,
+    FieldGoalsMade: r.FGM ?? 0, FieldGoalsAttempted: r.FGA ?? 0,
+    ThreePointersMade: r.FG3M ?? 0, ThreePointersAttempted: r.FG3A ?? 0,
+    FreeThrowsMade: r.FTM ?? 0, FreeThrowsAttempted: r.FTA ?? 0,
+    PlusMinus: r.PLUS_MINUS ?? 0,
+  }));
+  const avg = (key) => logs.reduce((s, g) => s + (g[key] ?? 0), 0) / logs.length;
+  const sum = (key) => logs.reduce((s, g) => s + (g[key] ?? 0), 0);
+  const fgm = sum('FieldGoalsMade'), fga = sum('FieldGoalsAttempted');
+  const tpm = sum('ThreePointersMade'), tpa = sum('ThreePointersAttempted');
+  const ftm = sum('FreeThrowsMade'), fta = sum('FreeThrowsAttempted');
+  return {
+    PlayerID: Number(playerId), Season: Number(season),
+    Games: logs.length, Minutes: avg('Minutes'),
+    Points: avg('Points'), Rebounds: avg('Rebounds'), Assists: avg('Assists'),
+    Steals: avg('Steals'), BlockedShots: avg('BlockedShots'), Turnovers: avg('Turnovers'),
+    PersonalFouls: avg('PersonalFouls'),
+    FieldGoalsPercentage:    fga > 0 ? fgm / fga : 0,
+    ThreePointersPercentage: tpa > 0 ? tpm / tpa : 0,
+    FreeThrowsPercentage:    fta > 0 ? ftm / fta : 0,
+    TrueShootingPercentage: 0, PlayerEfficiencyRating: 0, UsageRatePercentage: 0,
+    PlusMinus: avg('PlusMinus'), DoubleDoubles: 0, TripleDoubles: 0,
+  };
+}
+
 export async function getAllPlayerSeasonStats(season) {
   const seasonStr = toSeasonStr(season);
   const data = await nbFetch('/stats/leaguedashplayerstats', {

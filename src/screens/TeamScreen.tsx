@@ -540,11 +540,7 @@ function PlayerRow({ player: p, teamKey, alt, nbaIdMap }: {
   );
 }
 
-const POS_GROUPS: Record<string, string[]> = {
-  Guards:   ['PG', 'SG', 'G'],
-  Forwards: ['SF', 'PF', 'F'],
-  Centers:  ['C'],
-};
+const GROUP_PLURAL: Record<string, string> = { Guard: 'Guards', Forward: 'Forwards', Center: 'Centers', Other: 'Other' };
 
 function RosterTab({ teamKey }: { teamKey: string }) {
   const [players, setPlayers]   = useState<Player[]>([]);
@@ -566,11 +562,8 @@ function RosterTab({ teamKey }: { teamKey: string }) {
 
   const grouped: Record<string, Player[]> = { Guards: [], Forwards: [], Centers: [], Other: [] };
   players.forEach(p => {
-    const pos = (p.Position ?? '').toUpperCase();
-    if (POS_GROUPS.Guards.includes(pos))   grouped.Guards.push(p);
-    else if (POS_GROUPS.Forwards.includes(pos)) grouped.Forwards.push(p);
-    else if (POS_GROUPS.Centers.includes(pos))  grouped.Centers.push(p);
-    else grouped.Other.push(p);
+    const group = GROUP_PLURAL[positionGroup(p.Position ?? '')] ?? 'Other';
+    grouped[group].push(p);
   });
 
   return (
@@ -1094,10 +1087,11 @@ function RankBadge({ rank }: { rank?: number }) {
 
 function positionGroup(pos: string): string {
   if (!pos) return 'Other';
-  const p = pos.toUpperCase();
-  if (p.includes('C')) return 'Center';  // C, C-F, F-C all → Center
-  if (p.includes('G')) return 'Guard';   // G, G-F → Guard
-  if (p.includes('F')) return 'Forward'; // F → Forward
+  // NBA.com lists the primary position first in hybrid labels (e.g. "Forward-Center" → primarily a Forward)
+  const primary = pos.split('-')[0].trim().toUpperCase();
+  if (primary.startsWith('G')) return 'Guard';
+  if (primary.startsWith('F')) return 'Forward';
+  if (primary.startsWith('C')) return 'Center';
   return 'Other';
 }
 
@@ -1177,10 +1171,8 @@ function StatsTab({ teamKey }: { teamKey: string }) {
 
   useEffect(() => {
     setLoading(true);
-    setLoadingRoster(true);
     setRegular(null);
     setPlayoffs(null);
-    setRosterStats([]);
 
     NBAService.getTeamSeasonStats(teamKey, selectedSeason)
       .then(res => {
@@ -1191,12 +1183,19 @@ function StatsTab({ teamKey }: { teamKey: string }) {
       })
       .catch(() => {})
       .finally(() => setLoading(false));
+  }, [teamKey, selectedSeason]);
 
-    NBAService.getTeamPlayerStats(teamKey, selectedSeason)
+  // Separate effect so switching Regular/Playoffs only reloads the roster stats,
+  // not the team-level cards above.
+  useEffect(() => {
+    setLoadingRoster(true);
+    setRosterStats([]);
+
+    NBAService.getTeamPlayerStats(teamKey, selectedSeason, view)
       .then(res => setRosterStats(res.players ?? []))
       .catch(() => {})
       .finally(() => setLoadingRoster(false));
-  }, [teamKey, selectedSeason]);
+  }, [teamKey, selectedSeason, view]);
 
   const fmtPct = (v: number) => v ? (v * 100).toFixed(1) + '%' : '—';
   const fmt    = (v: number, d = 1) => v != null ? v.toFixed(d) : '—';
@@ -1328,12 +1327,12 @@ function StatsTab({ teamKey }: { teamKey: string }) {
       {/* ── Player Stats ── */}
       {loadingRoster ? (
         <View style={s.card}>
-          <Text style={s.sectionLabel}>Player Stats</Text>
+          <Text style={s.sectionLabel}>{view === 'playoffs' ? 'Player Playoff Stats' : 'Player Stats'}</Text>
           <ActivityIndicator color="#fff" style={{ marginVertical: 16 }} />
         </View>
       ) : rosterStats.length === 0 ? (
         <View style={s.card}>
-          <Text style={s.sectionLabel}>Player Stats</Text>
+          <Text style={s.sectionLabel}>{view === 'playoffs' ? 'Player Playoff Stats' : 'Player Stats'}</Text>
           <Text style={[s.emptyText, { marginTop: 12 }]}>No player data</Text>
         </View>
       ) : (() => {
@@ -1351,9 +1350,14 @@ function StatsTab({ teamKey }: { teamKey: string }) {
           { key: 'PF',      label: 'Fouls',    getValue: s => s?.PersonalFouls ?? 0 },
         ];
 
+        // Qualifying games threshold — keeps small-sample outliers (e.g. 75% FG on 2 games)
+        // off the leaderboards, same way NBA.com requires a minimum games played to qualify.
+        const maxRosterGames = rosterStats.reduce((m, r) => Math.max(m, r.stats?.Games ?? 0), 0);
+        const minRosterGames = Math.max(5, Math.round(maxRosterGames * 0.5));
+
         const renderStatCard = (stat: typeof STAT_CATEGORIES[0]) => {
           const sorted = [...rosterStats]
-            .filter(r => r.stats)
+            .filter(r => r.stats && (r.stats.Games ?? 0) >= minRosterGames)
             .sort((a, b) => stat.getValue(b.stats) - stat.getValue(a.stats));
           const top5 = sorted.slice(0, 5);
           const fmtVal = (v: number) => stat.fmt ? stat.fmt(v) : v.toFixed(1);

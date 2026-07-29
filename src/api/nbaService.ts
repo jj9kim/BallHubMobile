@@ -180,8 +180,8 @@ export const NBAService = {
   getTeamSeasonStats: (team: string, season = 2025) =>
     apiFetch<{ regular: any; playoffs: any; regularRanks: any; playoffRanks: any }>(`/api/teams/${team}/stats/${season}`),
 
-  getTeamPlayerStats: (team: string, season = 2025) =>
-    apiFetch<{ players: { player: any; stats: any }[] }>(`/api/teams/${team}/player-stats/${season}`),
+  getTeamPlayerStats: (team: string, season = 2025, seasonType: 'regular' | 'playoffs' = 'regular') =>
+    apiFetch<{ players: { player: any; stats: any }[] }>(`/api/teams/${team}/player-stats/${season}${seasonType === 'playoffs' ? '?type=playoffs' : ''}`),
 
   getLeagueTeamStats: (season = 2025, seasonType = 2) =>
     apiFetch<{ teams: { abbr: string; stats: any }[] }>(`/api/teams/league-stats/${season}/${seasonType}`),
@@ -191,6 +191,9 @@ export const NBAService = {
     apiFetch<{ map: Record<number, number> }>('/api/players/nba-id-map'),
 
   // Players
+  getLeaguePlayerStats: (season = 2025, seasonType: 'regular' | 'playoffs' = 'regular') =>
+    apiFetch<{ players: any[]; count: number }>(`/api/players/league-stats/${season}${seasonType === 'playoffs' ? '?type=playoffs' : ''}`),
+
   getPlayerById: (id: number) =>
     apiFetch<{ player: Player }>(`/api/players/${id}`),
 
