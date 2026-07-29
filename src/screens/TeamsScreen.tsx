@@ -101,7 +101,7 @@ function StandingsSection({ teams, title }: { teams: Standing[]; title?: string 
             <Text style={s.cell}>{team.Percentage.toFixed(3)}</Text>
             <Text style={s.cell}>{calcGB(leader, team)}</Text>
             <Text style={s.cell}>{team.LastTenWins}-{team.LastTenLosses}</Text>
-            <Text style={[s.cell, streak.startsWith('W') ? s.win : s.loss]}>{streak}</Text>
+            <Text style={[s.cell, { color: streak.startsWith('W') ? '#fff' : '#555' }]}>{streak}</Text>
           </TouchableOpacity>
         );
       })}
@@ -549,8 +549,8 @@ const s = StyleSheet.create({
   teamCol:          { flex: 1 },
   teamCity:         { color: '#777', fontSize: 10, fontWeight: '600' },
   teamName:         { color: '#fff', fontSize: 12, fontWeight: '700', marginTop: 1 },
-  win:              { color: '#4caf50', fontWeight: '700' },
-  loss:             { color: '#e05a5a' },
+  win:              { color: '#fff', fontWeight: '700' },
+  loss:             { color: '#555' },
   winner:           { color: '#fff', fontWeight: '800' },
   loser:            { color: '#555' },
 
