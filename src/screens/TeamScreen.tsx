@@ -455,7 +455,10 @@ function OverviewTab({ teamKey, standing, allStandings }: {
               <Text style={[s.standStat, isMe && { color: '#fff' }]}>{t.Losses}</Text>
               <Text style={[s.standStat, isMe && { color: '#fff' }]}>{t.Percentage.toFixed(3)}</Text>
               <Text style={[s.standStat, isMe && { color: '#fff' }]}>{gb}</Text>
-              <Text style={[s.standStat, { color: streak.startsWith('W') ? '#fff' : '#555' }]}>{streak}</Text>
+              <View style={[s.standStat, { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5 }]}>
+                <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: streak.startsWith('W') ? '#fff' : '#555' }} />
+                <Text style={{ color: streak.startsWith('W') ? '#fff' : '#aaa', fontSize: 12, fontWeight: '600' }}>{streak.replace(/^[WL]/, '')}</Text>
+              </View>
             </View>
           );
         })}
