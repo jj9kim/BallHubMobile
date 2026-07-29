@@ -545,9 +545,10 @@ function StandingsTable({ teams, highlightTeams, rankOffset = 0 }: {
             <Text style={table.cell}>{team.Percentage.toFixed(3)}</Text>
             <Text style={table.cell}>{leader ? calcGamesBack(leader, team) : '—'}</Text>
             <Text style={table.cell}>{team.LastTenWins}-{team.LastTenLosses}</Text>
-            <Text style={[table.cell, streak.startsWith('W') ? table.win : table.loss]}>
-              {streak}
-            </Text>
+            <View style={[table.cell, { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5 }]}>
+              <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: streak.startsWith('W') ? '#fff' : '#555' }} />
+              <Text style={{ color: streak.startsWith('W') ? '#fff' : '#aaa', fontSize: 12, fontWeight: '600' }}>{streak.replace(/^[WL]/, '')}</Text>
+            </View>
           </TouchableOpacity>
         );
       })}
