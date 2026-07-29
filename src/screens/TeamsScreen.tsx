@@ -101,7 +101,10 @@ function StandingsSection({ teams, title }: { teams: Standing[]; title?: string 
             <Text style={s.cell}>{team.Percentage.toFixed(3)}</Text>
             <Text style={s.cell}>{calcGB(leader, team)}</Text>
             <Text style={s.cell}>{team.LastTenWins}-{team.LastTenLosses}</Text>
-            <Text style={[s.cell, { color: streak.startsWith('W') ? '#fff' : '#555' }]}>{streak}</Text>
+            <View style={[s.cell, { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4 }]}>
+              <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: streak.startsWith('W') ? '#fff' : '#333' }} />
+              <Text style={{ color: '#888', fontSize: 11 }}>{streak.replace(/^[WL]/, '')}</Text>
+            </View>
           </TouchableOpacity>
         );
       })}
