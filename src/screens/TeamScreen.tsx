@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   View, Text, StyleSheet, SafeAreaView, ScrollView,
   TouchableOpacity, Image, ActivityIndicator, Dimensions, Modal,
+  LayoutChangeEvent,
 } from 'react-native';
 import Svg, { Line, Circle, Rect, Path } from 'react-native-svg';
 import { useNavigation } from '@react-navigation/native';
@@ -590,54 +591,81 @@ function RosterTab({ teamKey }: { teamKey: string }) {
 // ── Matches Tab (placeholder) ─────────────────────────────────────────────────
 
 function MatchesTab({ teamKey }: { teamKey: string }) {
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [schedule, setSchedule] = useState<Game[]>([]);
   const [loading, setLoading]   = useState(true);
-  const [showPast, setShowPast] = useState(false);
+  const scrollRef    = useRef<ScrollView>(null);
+  const didScrollRef = useRef(false);
 
   useEffect(() => {
+    setLoading(true);
+    didScrollRef.current = false;
     NBAService.getTeamSchedule(teamKey)
       .then(res => { setSchedule(res.games ?? []); setLoading(false); })
       .catch(() => setLoading(false));
   }, [teamKey]);
 
-  const past   = schedule.filter(g => isGameFinal(g)).reverse();
+  // Chronological order: past results first (oldest → newest), then upcoming
+  // games (soonest → furthest out). Opening the tab jumps the scroll position
+  // to the most recent result, so it's the default view — scroll down for
+  // upcoming games, scroll up for earlier results.
+  const past   = schedule.filter(g => isGameFinal(g));
   const future = schedule.filter(g => !isGameFinal(g) && g.Status !== 'InProgress');
-  const games  = showPast ? past : future;
+
+  const renderRow = (g: Game, isFirst: boolean, onLayout?: (e: LayoutChangeEvent) => void) => {
+    const isHome   = g.HomeTeam === teamKey;
+    const opp      = isHome ? g.AwayTeam : g.HomeTeam;
+    const myScore  = isHome ? g.HomeTeamScore : g.AwayTeamScore;
+    const oppScore = isHome ? g.AwayTeamScore : g.HomeTeamScore;
+    const won      = isGameFinal(g) && myScore > oppScore;
+    const date     = g.Day ? new Date(g.Day).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
+    return (
+      <TouchableOpacity
+        key={g.GameID}
+        onLayout={onLayout}
+        activeOpacity={0.7}
+        onPress={() => navigation.navigate('Game', { gameId: g.GameID, gameDate: g.Day.split('T')[0] })}
+        style={[s.matchRow, !isFirst && { borderTopWidth: 1, borderTopColor: '#1e1e1e' }]}
+      >
+        <Text style={s.matchDate}>{date}</Text>
+        <TeamLogo abbrev={opp} size={24} />
+        <Text style={s.matchOpp}>{isHome ? 'vs' : '@'} {opp}</Text>
+        {isGameFinal(g) ? (
+          <Text style={[s.matchScore, won ? s.winner : s.loser]}>{won ? 'W' : 'L'} {myScore}–{oppScore}</Text>
+        ) : (
+          <Text style={s.matchTime}>
+            {g.DateTime ? new Date(g.DateTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : 'TBD'}
+          </Text>
+        )}
+      </TouchableOpacity>
+    );
+  };
+
+  const anchorToMostRecent = (e: LayoutChangeEvent) => {
+    if (didScrollRef.current) return;
+    didScrollRef.current = true;
+    const y = e.nativeEvent.layout.y;
+    requestAnimationFrame(() => scrollRef.current?.scrollTo({ y, animated: false }));
+  };
 
   return (
     <View style={{ flex: 1 }}>
-      <View style={{ flexDirection: 'row', margin: 12, gap: 8 }}>
-        {[{ label: 'Upcoming', val: false }, { label: 'Results', val: true }].map(({ label, val }) => (
-          <TouchableOpacity key={label} style={[s.chip, showPast === val && s.chipActive]} onPress={() => setShowPast(val)}>
-            <Text style={[s.chipText, showPast === val && s.chipTextActive]}>{label}</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
       {loading ? <ActivityIndicator color="#fff" style={{ marginTop: 40 }} /> : (
-        <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 40 }}>
-          {games.map((g, i) => {
-            const isHome   = g.HomeTeam === teamKey;
-            const opp      = isHome ? g.AwayTeam : g.HomeTeam;
-            const myScore  = isHome ? g.HomeTeamScore : g.AwayTeamScore;
-            const oppScore = isHome ? g.AwayTeamScore : g.HomeTeamScore;
-            const won      = isGameFinal(g) && myScore > oppScore;
-            const date     = g.Day ? new Date(g.Day).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
-            return (
-              <View key={g.GameID} style={[s.matchRow, i > 0 && { borderTopWidth: 1, borderTopColor: '#1e1e1e' }]}>
-                <Text style={s.matchDate}>{date}</Text>
-                <TeamLogo abbrev={opp} size={24} />
-                <Text style={s.matchOpp}>{isHome ? 'vs' : '@'} {opp}</Text>
-                {isGameFinal(g) ? (
-                  <Text style={[s.matchScore, won ? s.winner : s.loser]}>{won ? 'W' : 'L'} {myScore}–{oppScore}</Text>
-                ) : (
-                  <Text style={s.matchTime}>
-                    {g.DateTime ? new Date(g.DateTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : 'TBD'}
-                  </Text>
-                )}
+        past.length === 0 && future.length === 0 ? (
+          <Text style={[s.emptyText, { textAlign: 'center', marginTop: 40 }]}>No games scheduled</Text>
+        ) : (
+          <ScrollView ref={scrollRef} contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 40 }}>
+            {past.map((g, i) => renderRow(g, i === 0, i === past.length - 1 ? anchorToMostRecent : undefined))}
+            {past.length > 0 && future.length > 0 && (
+              <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 10, gap: 8 }}>
+                <View style={{ flex: 1, height: 1, backgroundColor: '#2a2a2a' }} />
+                <Text style={{ color: '#555', fontSize: 11, fontWeight: '700', letterSpacing: 0.5 }}>TODAY</Text>
+                <View style={{ flex: 1, height: 1, backgroundColor: '#2a2a2a' }} />
               </View>
-            );
-          })}
-        </ScrollView>
+            )}
+            {future.map((g, i) => renderRow(g, i === 0 && past.length === 0))}
+          </ScrollView>
+        )
       )}
     </View>
   );

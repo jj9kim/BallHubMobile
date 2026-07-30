@@ -486,9 +486,11 @@ export async function getGamesByDate(date) {
   // For past dates, ESPN is authoritative — 0 games means it's a rest day
   if (isPast) return [];
 
-  // Fallback to NBA scoreboardV2 if ESPN returns nothing (future dates only)
+  // Fallback to NBA scoreboardV2 if ESPN returns nothing (future dates only).
+  // Best-effort — if NBA.com is unreachable/blocked, treat it the same as "no
+  // games yet" rather than surfacing a 500 to the client.
   const [scoreboardGames, playoffByDate] = await Promise.all([
-    getScoreboardByDate(date),
+    getScoreboardByDate(date).catch(() => []),
     isPast ? getPlayoffGamesByDate(date) : Promise.resolve([]),
   ]);
 
