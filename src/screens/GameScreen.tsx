@@ -721,10 +721,10 @@ export default function GameScreen({ route, navigation }: Props) {
     );
   }
 
-  if (error || !boxscore) {
+  if (error || !boxscore?.Game?.GameID) {
     return (
       <SafeAreaView style={s.container}>
-        <Text style={s.empty}>{error ?? 'Game not found'}</Text>
+        <Text style={s.empty}>{error ?? 'Box score not available yet'}</Text>
       </SafeAreaView>
     );
   }
