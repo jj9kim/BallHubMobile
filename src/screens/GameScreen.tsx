@@ -260,6 +260,10 @@ function CourtPlayer({
   const rating = calculateRating(player);
   const nbaid  = nbaIdMap[player.PlayerID];
   const photoUri = player.PhotoUrl ?? (nbaid ? `https://cdn.nba.com/headshots/nba/latest/1040x760/${nbaid}.png` : null);
+  // Last name = everything after the first word, so suffixes like "Jr."/"III"
+  // stay attached (e.g. "Bronny James Jr." → "James Jr.", not just "Jr.")
+  const nameParts = player.Name?.split(' ') ?? [];
+  const lastName  = nameParts.length > 1 ? nameParts.slice(1).join(' ') : nameParts[0] ?? '';
 
   return (
     <TouchableOpacity
@@ -275,11 +279,11 @@ function CourtPlayer({
           <Image source={{ uri: photoUri }} style={court.photo} onError={() => setImgFailed(true)} />
         ) : (
           <View style={[court.photoFallback, { backgroundColor: teamColors[player.Team] ?? '#555' }]}>
-            <Text style={court.photoFallbackText}>{player.Name?.split(' ').pop()?.slice(0, 2)}</Text>
+            <Text style={court.photoFallbackText}>{lastName.slice(0, 2).toUpperCase()}</Text>
           </View>
         )}
       </View>
-      <Text style={court.playerName} numberOfLines={1}>{player.Name?.split(' ').pop()}</Text>
+      <Text style={court.playerName} numberOfLines={1}>{lastName}</Text>
     </TouchableOpacity>
   );
 }
@@ -290,6 +294,10 @@ function BenchRow({ player, nbaIdMap, onPress }: { player: any; nbaIdMap: Record
   const color   = teamColors[player.Team] ?? '#555';
   const nbaid   = nbaIdMap[player.PlayerID];
   const photoUri = player.PhotoUrl ?? (nbaid ? `https://cdn.nba.com/headshots/nba/latest/1040x760/${nbaid}.png` : null);
+  // Last name = everything after the first word, so suffixes like "Jr."/"III"
+  // stay attached (e.g. "Bronny James Jr." → "James Jr.", not just "Jr.")
+  const nameParts = player.Name?.split(' ') ?? [];
+  const lastName  = nameParts.length > 1 ? nameParts.slice(1).join(' ') : nameParts[0] ?? '';
 
   return (
     <TouchableOpacity style={lineup.playerRow} onPress={() => onPress(player)} activeOpacity={0.7}>
@@ -299,7 +307,7 @@ function BenchRow({ player, nbaIdMap, onPress }: { player: any; nbaIdMap: Record
           <Image source={{ uri: photoUri }} style={{ width: '100%', height: '100%' }} onError={() => setImgFailed(true)} />
         ) : (
           <View style={[lineup.photoFallback, { backgroundColor: color }]}>
-            <Text style={lineup.photoInitials}>{player.Name?.split(' ').pop()?.slice(0, 2)}</Text>
+            <Text style={lineup.photoInitials}>{lastName.slice(0, 2).toUpperCase()}</Text>
           </View>
         )}
       </View>
