@@ -892,6 +892,37 @@ export async function getSchedule(season) {
 
 // ── Box score ─────────────────────────────────────────────────────────────────
 
+// Find the ESPN game ID for a game NBA.com didn't give us data for, by matching
+// teams on the scoreboard for gameDate (± 1 day for timezone edge cases).
+// homeId/visitorId (NBA team IDs) are the most reliable match when available;
+// awayHint/homeHint (team abbreviations, provided by the caller) let this work
+// even when we have zero data from NBA.com at all (e.g. a timed-out request).
+async function findEspnGameId(gameDate, awayHint, homeHint, homeId = null, visitorId = null) {
+  if (!gameDate) return null;
+  const homeAbbr = homeId ? (ID_TO_APP[parseInt(homeId)] ?? '') : '';
+  const awayAbbr = visitorId ? (ID_TO_APP[parseInt(visitorId)] ?? '') : '';
+  const aliases = ESPN_TEAM_ALIASES;
+  const matchesTeam = (sbTeam, key) => {
+    if (!key) return false;
+    const possible = aliases[key] ?? [key];
+    return possible.includes(sbTeam);
+  };
+  for (const offset of [0, -1, 1]) {
+    const d = new Date(gameDate + 'T12:00:00Z');
+    d.setUTCDate(d.getUTCDate() + offset);
+    const adjDate = d.toISOString().split('T')[0];
+    // Use live fetch so we don't fail when the scoreboard was never cached for that date
+    const sbGames = await getEspnGamesByDate(adjDate).catch(() => []);
+    const match = sbGames.find(g =>
+      (homeId && g.HomeTeamID === parseInt(homeId) && g.AwayTeamID === parseInt(visitorId)) ||
+      (homeAbbr && matchesTeam(g.HomeTeam, homeAbbr) && matchesTeam(g.AwayTeam, awayAbbr)) ||
+      (homeHint && matchesTeam(g.HomeTeam, homeHint) && awayHint && matchesTeam(g.AwayTeam, awayHint))
+    );
+    if (match?._espnId) return match._espnId;
+  }
+  return null;
+}
+
 export async function getBoxScore(gameId, gameDate = null, awayHint = null, homeHint = null) {
   // ESPN IDs are 9 digits (e.g. 401859963); NBA IDs start with 002/004 (10 digits)
   // If the ID doesn't look like an NBA game ID, use ESPN box score
@@ -945,7 +976,11 @@ export async function getBoxScore(gameId, gameDate = null, awayHint = null, home
     ]);
   } catch (err) {
     if (err.message === 'Boxscore fetch timeout') {
-      // Timeout: return empty boxscore so team page doesn't block
+      // Timeout (NBA.com unreachable/slow) — try ESPN via date+team hints before
+      // giving up, so the team page isn't stuck with an empty box score whenever
+      // NBA.com is having trouble, not just when it responds with nothing.
+      const espnId = await findEspnGameId(gameDate, awayHint, homeHint);
+      if (espnId) return getEspnBoxScore(espnId);
       return { Game: {}, PlayerGames: [], TeamGames: [] };
     }
     throw err;
@@ -959,35 +994,10 @@ export async function getBoxScore(gameId, gameDate = null, awayHint = null, home
     if (existsSync(cacheFile)) { try { unlinkSync(cacheFile); } catch {} }
 
     // NBA API returned empty — find ESPN game ID from daily scoreboard by matching teams
-    if (gameDate) {
-      // Get the two teams from the NBA game summary
-      const gameSummaryRows = parseRS(data.resultSets, 'GameSummary');
-      const summaryRow = gameSummaryRows[0];
-      const homeId = summaryRow?.HOME_TEAM_ID;
-      const visitorId = summaryRow?.VISITOR_TEAM_ID;
-      const homeAbbr = homeId ? (ID_TO_APP[parseInt(homeId)] ?? '') : '';
-      const awayAbbr = visitorId ? (ID_TO_APP[parseInt(visitorId)] ?? '') : '';
-
-      const aliases = ESPN_TEAM_ALIASES;
-      const matchesTeam = (sbTeam, key) => {
-        if (!key) return false;
-        const possible = aliases[key] ?? [key];
-        return possible.includes(sbTeam);
-      };
-      for (const offset of [0, -1, 1]) {
-        const d = new Date(gameDate + 'T12:00:00Z');
-        d.setUTCDate(d.getUTCDate() + offset);
-        const adjDate = d.toISOString().split('T')[0];
-        // Use live fetch so we don't fail when the scoreboard was never cached for that date
-        const sbGames = await getEspnGamesByDate(adjDate).catch(() => []);
-        const match = sbGames.find(g =>
-          (homeId && g.HomeTeamID === parseInt(homeId) && g.AwayTeamID === parseInt(visitorId)) ||
-          (homeAbbr && matchesTeam(g.HomeTeam, homeAbbr) && matchesTeam(g.AwayTeam, awayAbbr)) ||
-          (homeHint && matchesTeam(g.HomeTeam, homeHint) && awayHint && matchesTeam(g.AwayTeam, awayHint))
-        );
-        if (match?._espnId) return getEspnBoxScore(match._espnId);
-      }
-    }
+    const gameSummaryRows = parseRS(data.resultSets, 'GameSummary');
+    const summaryRow = gameSummaryRows[0];
+    const espnId = await findEspnGameId(gameDate, awayHint, homeHint, summaryRow?.HOME_TEAM_ID, summaryRow?.VISITOR_TEAM_ID);
+    if (espnId) return getEspnBoxScore(espnId);
     throw new Error(`Box score not found for game ${gameId}`);
   }
 

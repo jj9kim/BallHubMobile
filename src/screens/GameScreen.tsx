@@ -323,49 +323,73 @@ function BenchRow({ player, nbaIdMap, onPress }: { player: any; nbaIdMap: Record
   );
 }
 
+// Granular codes (from the SportsData.io lookup) rank exactly; coarse codes
+// (G/F/C, all the box score ever gives us) rank at the midpoint of the two
+// granular positions they cover, so a plain "F" sits between SF and PF.
+const POSITION_RANK: Record<string, number> = { PG: 0, SG: 1, SF: 2, PF: 3, C: 4, G: 0.5, F: 2.5 };
+
+function positionRank(pos: string): number {
+  const primary = (pos ?? '').toUpperCase().split('-')[0]; // hybrids like "F-C" → "F"
+  return POSITION_RANK[primary] ?? 2; // unknown/missing — assume the middle so it doesn't skew badly
+}
+
+const normalizeName = (s: string) => s.toLowerCase().normalize('NFD').replace(/[^a-z0-9]/g, '');
+
 function LineupTab({ players, homeTeam, awayTeam }: { players: any[]; homeTeam: string; awayTeam: string }) {
   const screenW = Dimensions.get('window').width;
   const courtW  = screenW;
   const courtH  = courtW * 1.9;
   const [nbaIdMap, setNbaIdMap]       = useState<Record<number,number>>({});
   const [selectedPlayer, setSelectedPlayer] = useState<any>(null);
+  const [positionsMap, setPositionsMap] = useState<Record<string, string>>({});
 
   useEffect(() => {
     NBAService.getNbaIdMap().then(res => setNbaIdMap(res.map ?? {})).catch(() => {});
-  }, []); // aspect ratio similar to real court
+  }, []);
 
-  // Vertical court positions (x/y as % of court width/height)
+  useEffect(() => {
+    // Granular PG/SG/SF/PF/C by name — box score only gives coarse G/F/C
+    Promise.all([
+      NBAService.getTeamPositions(awayTeam).catch(() => ({ positions: [] })),
+      NBAService.getTeamPositions(homeTeam).catch(() => ({ positions: [] })),
+    ]).then(([awayRes, homeRes]) => {
+      const map: Record<string, string> = {};
+      [...(awayRes.positions ?? []), ...(homeRes.positions ?? [])].forEach(p => {
+        map[normalizeName(`${p.FirstName} ${p.LastName}`)] = p.Position;
+      });
+      setPositionsMap(map);
+    }).catch(() => {});
+  }, [awayTeam, homeTeam]);
+
+  // Vertical court positions (x/y as % of court width/height), ranked PG→C
+  // (rank 0→4) so they can be paired up with players sorted the same way.
   // Away = top half (y 2–48), Home = bottom half (y 52–98)
-  const POS_MAP: Record<string, { away: {x:number;y:number}; home: {x:number;y:number} }> = {
-    PG: { away: { x: 50, y: 38 }, home: { x: 50, y: 62 } },
-    SG: { away: { x: 22, y: 28 }, home: { x: 78, y: 72 } },
-    SF: { away: { x: 78, y: 28 }, home: { x: 22, y: 72 } },
-    PF: { away: { x: 28, y: 14 }, home: { x: 72, y: 86 } },
-    C:  { away: { x: 50, y:  8 }, home: { x: 50, y: 92 } },
-  };
-  const POS_ORDER = ['PG','SG','SF','PF','C'];
+  const LINEUP_SLOTS: { away: {x:number;y:number}; home: {x:number;y:number} }[] = [
+    { away: { x: 50, y: 38 }, home: { x: 50, y: 62 } }, // PG
+    { away: { x: 22, y: 28 }, home: { x: 78, y: 72 } }, // SG
+    { away: { x: 78, y: 28 }, home: { x: 22, y: 72 } }, // SF
+    { away: { x: 28, y: 14 }, home: { x: 72, y: 86 } }, // PF
+    { away: { x: 50, y:  8 }, home: { x: 50, y: 92 } }, // C
+  ];
 
+  // Sorting both players and slots by the same PG→C rank and pairing them up
+  // (instead of matching each player to "their" slot one-for-one) means an
+  // unbalanced lineup — e.g. a team starting two shooting guards and a center
+  // who's only labeled "PF" — still slides into roughly the right spots, with
+  // the highest-ranked player always landing in the Center slot, rather than a
+  // leftover player getting dumped into whatever slot happens to be empty.
   const assignPositions = (team: string, isHome: boolean) => {
     const starters = players
       .filter(p => p.Team === team && p.Started === 1)
-      .sort((a, b) => (b.Minutes ?? 0) - (a.Minutes ?? 0));
-    const used = new Set<string>();
-    const result: { player: any; x: number; y: number }[] = [];
-
-    starters.forEach(p => {
-      const pos = p.Position?.toUpperCase();
-      if (pos && POS_MAP[pos] && !used.has(pos)) {
-        result.push({ player: p, ...(isHome ? POS_MAP[pos].home : POS_MAP[pos].away) });
-        used.add(pos);
-      }
-    });
-    starters.forEach(p => {
-      if (result.find(r => r.player.PlayerID === p.PlayerID)) return;
-      const pos = POS_ORDER.find(po => !used.has(po)) ?? 'PG';
-      result.push({ player: p, ...(isHome ? POS_MAP[pos].home : POS_MAP[pos].away) });
-      used.add(pos);
-    });
-    return result;
+      .sort((a, b) => (b.Minutes ?? 0) - (a.Minutes ?? 0))
+      .sort((a, b) => {
+        const posA = positionsMap[normalizeName(a.Name ?? '')] ?? a.Position;
+        const posB = positionsMap[normalizeName(b.Name ?? '')] ?? b.Position;
+        return positionRank(posA) - positionRank(posB);
+      });
+    return starters.slice(0, 5).map((player, i) => ({
+      player, ...(isHome ? LINEUP_SLOTS[i].home : LINEUP_SLOTS[i].away),
+    }));
   };
 
   const awayStarters = assignPositions(awayTeam, false);

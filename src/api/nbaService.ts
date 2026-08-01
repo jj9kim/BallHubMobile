@@ -174,6 +174,10 @@ export const NBAService = {
   getTeamRoster: (team: string) =>
     apiFetch<{ players: Player[] }>(`/api/teams/${team}/roster`),
 
+  // Granular PG/SG/SF/PF/C — NBA.com/ESPN only give coarse G/F/C
+  getTeamPositions: (team: string) =>
+    apiFetch<{ positions: { FirstName: string; LastName: string; Position: string }[] }>(`/api/teams/${team}/positions`),
+
   getTeamSchedule: (team: string, season = 2025) =>
     apiFetch<{ games: Game[] }>(`/api/teams/${team}/schedule/${season}`),
 

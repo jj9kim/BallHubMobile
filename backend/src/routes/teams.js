@@ -1,7 +1,11 @@
 import { Router } from 'express';
 import { getAllTeams, getTeamRoster, getHistoricalRoster, getTeamSchedule, getDraftClass, getTeamSalaries, getTeamSeasonStats, getAllLeagueTeamStats, getPlayerSeasonStats, getPlayerCareerStats, getPlayerPlayoffStats, getPlayerPlayoffStatsFromCache, existsDisk, readDisk, ESPN_TEAM_ALIASES } from '../services/nbaApiService.js';
+import { getTeamRoster as getSportsDataRoster } from '../services/sportsData.js';
 
 const CURRENT_SEASON = (() => { const n = new Date(); return n.getMonth() + 1 >= 10 ? n.getFullYear() : n.getFullYear() - 1; })();
+
+// Our app abbreviation → SportsData.io abbreviation (only these two differ)
+const SPORTSDATA_ABBR = { NOP: 'NO', GSW: 'GS' };
 
 const router = Router();
 
@@ -42,6 +46,23 @@ router.get('/:team/roster', async (req, res) => {
   try {
     const players = await getTeamRoster(req.params.team.toUpperCase());
     res.json({ success: true, players, count: players.length });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// GET /api/teams/:team/positions — granular PG/SG/SF/PF/C from SportsData.io
+// (NBA.com/ESPN only expose coarse G/F/C). Matched to players by name on
+// the frontend since SportsData.io PlayerIDs don't line up with ours.
+router.get('/:team/positions', async (req, res) => {
+  try {
+    const team = req.params.team.toUpperCase();
+    const sdTeam = SPORTSDATA_ABBR[team] ?? team;
+    const players = await getSportsDataRoster(sdTeam);
+    const positions = (players ?? []).map(p => ({
+      FirstName: p.FirstName, LastName: p.LastName, Position: p.Position,
+    }));
+    res.json({ success: true, positions });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }

@@ -72,14 +72,38 @@ function TabBar({ active, onChange }: { active: Tab; onChange: (t: Tab) => void 
 
 // ── Half-court with starters ──────────────────────────────────────────────────
 
-const POS_MAP: Record<string, { x: number; y: number }> = {
-  PG: { x: 50, y: 75 },
-  SG: { x: 22, y: 58 },
-  SF: { x: 78, y: 58 },
-  PF: { x: 28, y: 30 },
-  C:  { x: 50, y: 18 },
-};
-const POS_ORDER = ['PG','SG','SF','PF','C'];
+// Slots laid out in PG→SG→SF→PF→C order (rank 0→4), so they can be paired up
+// with players sorted the same way — see assignHalfCourtSlots below.
+const HALFCOURT_SLOTS: { rank: number; x: number; y: number }[] = [
+  { rank: 0, x: 50, y: 75 }, // PG — top of the key
+  { rank: 1, x: 22, y: 58 }, // SG — left wing
+  { rank: 2, x: 78, y: 58 }, // SF — right wing
+  { rank: 3, x: 28, y: 30 }, // PF — left post/elbow
+  { rank: 4, x: 50, y: 18 }, // C  — near the rim
+];
+
+// Granular codes (from the SportsData.io lookup) rank exactly; coarse codes
+// (G/F/C, all the box score ever gives us) rank at the midpoint of the two
+// granular positions they cover, so a plain "F" sits between SF and PF.
+const POSITION_RANK: Record<string, number> = { PG: 0, SG: 1, SF: 2, PF: 3, C: 4, G: 0.5, F: 2.5 };
+
+function positionRank(pos: string): number {
+  const primary = (pos ?? '').toUpperCase().split('-')[0]; // hybrids like "F-C" → "F"
+  return POSITION_RANK[primary] ?? 2; // unknown/missing — assume the middle so it doesn't skew badly
+}
+
+// Sorting both players and slots by the same PG→C rank and pairing them up
+// (instead of matching each player to "their" slot one-for-one) means an
+// unbalanced lineup — e.g. a team starting two shooting guards and a center
+// who's only labeled "PF" — still slides into roughly the right spots, with
+// the highest-ranked player always landing in the Center slot, rather than a
+// leftover player getting dumped into whatever slot happens to be empty.
+function assignHalfCourtSlots(starters: any[]): { player: any; x: number; y: number }[] {
+  const sortedPlayers = [...starters].sort((a, b) => positionRank(a.Position) - positionRank(b.Position));
+  return sortedPlayers.slice(0, 5).map((player, i) => ({
+    player, x: HALFCOURT_SLOTS[i].x, y: HALFCOURT_SLOTS[i].y,
+  }));
+}
 
 function StarterPin({ player, x, y, courtW, courtH, nbaIdMap }: {
   player: any; x: number; y: number; courtW: number; courtH: number;
@@ -131,24 +155,8 @@ function StarterPin({ player, x, y, courtW, courtH, nbaIdMap }: {
 function HalfCourt({ starters, nbaIdMap }: { starters: any[]; nbaIdMap: Record<number,number> }) {
   const courtW = Dimensions.get('window').width - 36;
   const courtH = courtW * 0.85;
-  const POS_ORDER_LOCAL = ['C','PF','SF','SG','PG'];
 
-  const assigned: { player: any; x: number; y: number }[] = [];
-  const used = new Set<string>();
-
-  starters.forEach(p => {
-    const pos = (p.Position ?? '').toUpperCase();
-    if (POS_MAP[pos] && !used.has(pos)) {
-      assigned.push({ player: p, ...POS_MAP[pos] });
-      used.add(pos);
-    }
-  });
-  starters.forEach(p => {
-    if (assigned.find(a => a.player.PlayerID === p.PlayerID)) return;
-    const pos = POS_ORDER.find(po => !used.has(po)) ?? 'PG';
-    assigned.push({ player: p, ...POS_MAP[pos] });
-    used.add(pos);
-  });
+  const assigned = assignHalfCourtSlots(starters);
 
   return (
     <View style={{ width: courtW, height: courtH, backgroundColor: '#2c2c2c', borderRadius: 12, overflow: 'hidden', alignSelf: 'center' }}>
@@ -225,10 +233,11 @@ function OverviewTab({ teamKey, standing, allStandings }: {
         setSchedule(games);
         const lastGame = [...games].filter(isGameFinal).pop();
         if (lastGame) {
-          const [boxRes, mapRes, rosterRes] = await Promise.all([
+          const [boxRes, mapRes, rosterRes, positionsRes] = await Promise.all([
             NBAService.getBoxScore(lastGame.GameID, lastGame.Day ?? undefined, lastGame.AwayTeam, lastGame.HomeTeam),
             NBAService.getNbaIdMap(),
             NBAService.getTeamRoster(teamKey),
+            NBAService.getTeamPositions(teamKey).catch(() => ({ positions: [] })),
           ]);
           const players: any[] = boxRes.boxscore?.PlayerGames ?? [];
           const TEAM_ABBR_VARIANTS: Record<string, string[]> = {
@@ -244,10 +253,18 @@ function OverviewTab({ teamKey, standing, allStandings }: {
           (rosterRes.players ?? []).forEach((p: Player) => {
             nameToId[normalize(`${p.FirstName} ${p.LastName}`)] = p.PlayerID;
           });
-          // Attach the correct PlayerID to each starter
+          // Granular PG/SG/SF/PF/C by name — box score only gives coarse G/F/C
+          const namedToPosition: Record<string, string> = {};
+          (positionsRes.positions ?? []).forEach(p => {
+            namedToPosition[normalize(`${p.FirstName} ${p.LastName}`)] = p.Position;
+          });
+
+          // Attach the correct PlayerID to each starter, and upgrade to the granular
+          // position when we have one (falls back to the box score's coarse G/F/C)
           const startersWithId = teamStarters.map(p => {
             const id = nameToId[normalize(p.Name ?? '')] ?? null;
-            return { ...p, PlayerID: id };  // null = no valid ID, pin won't navigate
+            const truePosition = namedToPosition[normalize(p.Name ?? '')];
+            return { ...p, PlayerID: id, Position: truePosition ?? p.Position };
           });
 
           setStarters(startersWithId);
